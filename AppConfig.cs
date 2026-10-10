@@ -50,8 +50,9 @@ namespace TUH_WristbandPrinter
             WindowMode = "Normal";
             AlwaysOnTop = false;
 
-            PrintMode = "Local";
-            RemoteServerHost = "";
+            SelectedPrinter = "ZDesigner GT800 (EPL)";
+            PrintMode = "Remote"; // Default client connects to host
+            RemoteServerHost = "172.30.249.158"; // Ward central print server
             RemoteServerPort = 8099;
             EnablePrintServer = true;
             ServerPort = 8099;
@@ -162,6 +163,12 @@ namespace TUH_WristbandPrinter
                         }
                     }
                 }
+                if (string.IsNullOrEmpty(config.RemoteServerHost) || config.RemoteServerHost == "127.0.0.1" || config.RemoteServerHost == "localhost")
+                {
+                    config.RemoteServerHost = "172.30.249.158";
+                }
+                if (config.RemoteServerPort <= 0) config.RemoteServerPort = 8099;
+                config.DefaultType = "Adult";
             }
             catch { }
             return config;

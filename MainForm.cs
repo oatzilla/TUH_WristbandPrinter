@@ -1042,33 +1042,101 @@ namespace TUH_WristbandPrinter
                 pnlLocalPrinter.Visible = false;
                 pnlRemotePrinter.Visible = true;
                 lblServerNotice.Visible = false;
-                lblCurrentPrinterStatus.Text = string.Format("เครื่องพิมพ์: [เครื่องแม่: {0}]", 
-                    string.IsNullOrEmpty(txtRemoteHost.Text) ? "ยังไม่ระบุ" : txtRemoteHost.Text);
+                lblCurrentPrinterStatus.Text = string.Format("เครื่องพิมพ์: [เครื่องแม่: {0}] (Zebra GT800)", 
+                    string.IsNullOrEmpty(txtRemoteHost.Text) ? "172.30.249.158" : txtRemoteHost.Text);
             }
             else
             {
                 pnlLocalPrinter.Visible = true;
                 pnlRemotePrinter.Visible = false;
                 lblServerNotice.Visible = true;
-                if (cboPrinters.SelectedItem != null)
+                string prn = FindGT800PrinterName();
+                if (string.IsNullOrEmpty(prn) && cboPrinters.SelectedItem != null)
+                    prn = cboPrinters.SelectedItem.ToString();
+                lblCurrentPrinterStatus.Text = "เครื่องพิมพ์: " + (string.IsNullOrEmpty(prn) ? "ZDesigner GT800 (EPL)" : prn);
+            }
+        }
+
+        private bool IsHostMachine()
+        {
+            try
+            {
+                if (string.Equals(Environment.MachineName, "HP600G6-009", StringComparison.OrdinalIgnoreCase))
+                    return true;
+
+                string localIp = PrintServerService.GetLocalIPAddress();
+                if (localIp == "172.30.249.158")
+                    return true;
+
+                foreach (string p in System.Drawing.Printing.PrinterSettings.InstalledPrinters)
                 {
-                    lblCurrentPrinterStatus.Text = "เครื่องพิมพ์: " + cboPrinters.SelectedItem;
+                    if (p.IndexOf("GT800", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                        p.IndexOf("ZDesigner", StringComparison.OrdinalIgnoreCase) >= 0)
+                    {
+                        return true;
+                    }
                 }
             }
+            catch { }
+            return false;
+        }
+
+        private string FindGT800PrinterName()
+        {
+            try
+            {
+                foreach (string p in System.Drawing.Printing.PrinterSettings.InstalledPrinters)
+                {
+                    if (p.IndexOf("GT800", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                        p.IndexOf("ZDesigner", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                        p.IndexOf("Zebra", StringComparison.OrdinalIgnoreCase) >= 0)
+                    {
+                        return p;
+                    }
+                }
+            }
+            catch { }
+            return "";
         }
 
         private void LoadPrintModeConfig()
         {
-            if (_config.PrintMode == "Remote")
+            bool isHost = IsHostMachine();
+
+            if (isHost)
             {
-                rdoPrintRemote.Checked = true;
-                txtRemoteHost.Text = _config.RemoteServerHost ?? "";
+                // เครื่องแม่: บังคับโหมด Local และเปิดใช้งาน Print Server
+                _config.PrintMode = "Local";
+                _config.EnablePrintServer = true;
+                if (_config.ServerPort <= 0) _config.ServerPort = 8099;
+
+                string gt800 = FindGT800PrinterName();
+                if (!string.IsNullOrEmpty(gt800))
+                {
+                    _config.SelectedPrinter = gt800;
+                    if (cboPrinters.Items.Contains(gt800))
+                        cboPrinters.SelectedItem = gt800;
+                }
+
+                rdoPrintLocal.Checked = true;
+                rdoPrintRemote.Checked = false;
+                txtRemoteHost.Text = string.IsNullOrEmpty(_config.RemoteServerHost) ? "172.30.249.158" : _config.RemoteServerHost;
             }
             else
             {
-                rdoPrintLocal.Checked = true;
-                txtRemoteHost.Text = _config.RemoteServerHost ?? "";
+                // เครื่องลูก: Default บังคับเชื่อมต่อเครื่องแม่ในวอร์ด (172.30.249.158)
+                _config.PrintMode = "Remote";
+                if (string.IsNullOrEmpty(_config.RemoteServerHost) || _config.RemoteServerHost == "127.0.0.1" || _config.RemoteServerHost == "localhost")
+                {
+                    _config.RemoteServerHost = "172.30.249.158";
+                }
+                if (_config.RemoteServerPort <= 0) _config.RemoteServerPort = 8099;
+
+                rdoPrintRemote.Checked = true;
+                rdoPrintLocal.Checked = false;
+                txtRemoteHost.Text = _config.RemoteServerHost;
             }
+
             TogglePrintModeUI();
         }
 
@@ -1199,22 +1267,10 @@ namespace TUH_WristbandPrinter
                 {
                     try
                     {
-                        prn = cboPrinters.SelectedItem != null ? cboPrinters.SelectedItem.ToString() : "";
-                        if (string.IsNullOrEmpty(prn)) prn = _config.SelectedPrinter;
-                        if (string.IsNullOrEmpty(prn))
-                        {
-                            foreach (var item in cboPrinters.Items)
-                            {
-                                string s = item.ToString();
-                                if (s.IndexOf("ZDesigner", StringComparison.OrdinalIgnoreCase) >= 0 ||
-                                    s.IndexOf("GT800", StringComparison.OrdinalIgnoreCase) >= 0 ||
-                                    s.IndexOf("Zebra", StringComparison.OrdinalIgnoreCase) >= 0)
-                                {
-                                    prn = s;
-                                    break;
-                                }
-                            }
-                        }
+                        // เครื่องแม่: บังคับหาเครื่องพิมพ์ GT800 เท่านั้น
+                        prn = FindGT800PrinterName();
+                        if (string.IsNullOrEmpty(prn)) prn = cboPrinters.SelectedItem != null ? cboPrinters.SelectedItem.ToString() : _config.SelectedPrinter;
+                        if (string.IsNullOrEmpty(prn)) prn = "ZDesigner GT800 (EPL)";
                         EphisService.Instance.PrintWristband(ds, prn, copies);
 
                         // Record to history on server machine
@@ -1985,8 +2041,13 @@ namespace TUH_WristbandPrinter
             }
             else
             {
-                // LOCAL DIRECT PRINT
-                string prn = cboPrinters.SelectedItem != null ? cboPrinters.SelectedItem.ToString() : "";
+                // LOCAL DIRECT PRINT (เครื่องแม่ - บังคับต่อกับ GT800 เท่านั้น)
+                string prn = FindGT800PrinterName();
+                if (string.IsNullOrEmpty(prn))
+                {
+                    prn = cboPrinters.SelectedItem != null ? cboPrinters.SelectedItem.ToString() : _config.SelectedPrinter;
+                }
+                if (string.IsNullOrEmpty(prn)) prn = "ZDesigner GT800 (EPL)";
                 EphisService.Instance.PrintWristband(ds, prn, copies);
                 resultMsg = string.Format("พิมพ์ออกเครื่อง {0} สำเร็จ", prn);
                 return true;
@@ -2400,35 +2461,31 @@ namespace TUH_WristbandPrinter
         private void LoadPrinters()
         {
             cboPrinters.Items.Clear();
-            string defaultPrn = "";
-            try
-            {
-                PrinterSettings ps = new PrinterSettings();
-                defaultPrn = ps.PrinterName;
-            }
-            catch { }
+            string gt800 = FindGT800PrinterName();
 
             foreach (string p in PrinterSettings.InstalledPrinters)
             {
                 cboPrinters.Items.Add(p);
             }
 
-            if (!string.IsNullOrEmpty(_config.SelectedPrinter) && cboPrinters.Items.Contains(_config.SelectedPrinter))
+            // เครื่องแม่: บังคับเลือกเครื่องพิมพ์ GT800 เท่านั้น
+            if (!string.IsNullOrEmpty(gt800))
+            {
+                cboPrinters.SelectedItem = gt800;
+                _config.SelectedPrinter = gt800;
+            }
+            else if (!string.IsNullOrEmpty(_config.SelectedPrinter) && cboPrinters.Items.Contains(_config.SelectedPrinter))
             {
                 cboPrinters.SelectedItem = _config.SelectedPrinter;
-            }
-            else if (!string.IsNullOrEmpty(defaultPrn) && cboPrinters.Items.Contains(defaultPrn))
-            {
-                cboPrinters.SelectedItem = defaultPrn;
             }
             else if (cboPrinters.Items.Count > 0)
             {
                 cboPrinters.SelectedIndex = 0;
             }
 
-            if (cboPrinters.SelectedItem != null && rdoPrintLocal != null && rdoPrintLocal.Checked)
+            if (rdoPrintLocal != null && rdoPrintLocal.Checked)
             {
-                lblCurrentPrinterStatus.Text = "เครื่องพิมพ์: " + cboPrinters.SelectedItem;
+                lblCurrentPrinterStatus.Text = "เครื่องพิมพ์: " + (!string.IsNullOrEmpty(gt800) ? gt800 : (cboPrinters.SelectedItem != null ? cboPrinters.SelectedItem.ToString() : ""));
             }
         }
 

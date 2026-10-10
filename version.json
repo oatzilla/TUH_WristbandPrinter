@@ -1,6 +1,6 @@
 {
-  "version": "1.4.3",
+  "version": "1.4.4",
   "releaseDate": "2026-10-10",
-  "changelog": "เมื่อกดพิมพ์สำเร็จจะล้างข้อมูลผู้ป่วยและช่องค้นหาให้อัตโนมัติทันที พร้อมรับการยิงบาร์โค้ดผู้ป่วยรายต่อไป",
+  "changelog": "ตั้งค่าเริ่มต้นให้เครื่องลูกเชื่อมต่อเครื่องแม่ (172.30.249.158) อัตโนมัติ และเครื่องแม่บังคับพิมพ์ออกเครื่องพิมพ์ Zebra GT800 เท่านั้น",
   "downloadUrl": "https://raw.githubusercontent.com/oatzilla/TUH_WristbandPrinter/main/bin/TUH_WristbandPrinter.exe"
 }
