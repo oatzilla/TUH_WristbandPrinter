@@ -26,6 +26,7 @@ namespace TUH_WristbandPrinter
         private Button btnLogout;
         private Button btnToggleSidebar;
         private Button btnTopHistory;
+        private Button btnServerBadge;
         private CheckBox chkAlwaysOnTop;
 
         // Body & layout
@@ -79,16 +80,25 @@ namespace TUH_WristbandPrinter
         private Button btnPrintSingle;
         private Button btnPreview;
 
-        // Printer config controls
+        // Printer & Central Print Server controls
         private Panel pnlPrinter;
         private Label lblPrnTitle;
+        private RadioButton rdoPrintLocal;
+        private RadioButton rdoPrintRemote;
+        private Panel pnlLocalPrinter;
         private ComboBox cboPrinters;
+        private Panel pnlRemotePrinter;
+        private TextBox txtRemoteHost;
+        private Button btnDiscoverServer;
+        private Button btnTestServer;
+        private Label lblRemoteStatus;
         private Button btnSavePrinter;
         private RadioButton rdoAdult;
         private RadioButton rdoChild;
         private Label lblCopies;
         private NumericUpDown numCopies;
         private CheckBox chkAutoPrint;
+        private Label lblServerNotice;
 
         // History
         private Panel pnlHist;
@@ -100,6 +110,7 @@ namespace TUH_WristbandPrinter
         private StatusStrip statusStrip;
         private ToolStripStatusLabel lblStatusMsg;
         private ToolStripStatusLabel lblCurrentPrinterStatus;
+        private ToolStripStatusLabel lblServerStatusStrip;
         private Timer heartbeatTimer;
 
         // Flash timer for duplicates
@@ -126,8 +137,13 @@ namespace TUH_WristbandPrinter
 
             InitializeComponent();
             LoadPrinters();
+            LoadPrintModeConfig();
             ResetPatientView();
             LoadRecentHistoryList();
+
+            // Start Central Print Server on host machine
+            StartPrintServerIfEnabled();
+            UpdateServerBadge();
 
             // Set app icon
             try
@@ -163,6 +179,10 @@ namespace TUH_WristbandPrinter
             this.KeyPreview = true;
             this.KeyDown += MainForm_KeyDown;
             this.Resize += MainForm_Resize;
+            this.FormClosing += (s, e) =>
+            {
+                try { PrintServerService.Instance.Stop(); } catch { }
+            };
         }
 
         private void MainForm_Resize(object sender, EventArgs e)
@@ -195,7 +215,7 @@ namespace TUH_WristbandPrinter
         private void InitializeComponent()
         {
             this.Text = "TUH Wristband Printer - ระบบพิมพ์สายรัดข้อมือผู้ป่วย";
-            this.Size = new Size(1100, 750);
+            this.Size = new Size(1100, 760);
             this.MinimumSize = new Size(380, 500);
             this.StartPosition = FormStartPosition.CenterScreen;
             this.BackColor = Color.FromArgb(243, 244, 246);
@@ -224,6 +244,19 @@ namespace TUH_WristbandPrinter
             lblAppSub.AutoSize = true;
             topBar.Controls.Add(lblAppSub);
 
+            btnServerBadge = new Button();
+            btnServerBadge.Text = "📡 Print Server";
+            btnServerBadge.Size = new Size(160, 32);
+            btnServerBadge.BackColor = Color.FromArgb(4, 120, 87); // Emerald Dark Green
+            btnServerBadge.ForeColor = Color.White;
+            btnServerBadge.FlatStyle = FlatStyle.Flat;
+            btnServerBadge.FlatAppearance.BorderSize = 0;
+            btnServerBadge.Font = new Font("Segoe UI", 8F, FontStyle.Bold);
+            btnServerBadge.Cursor = Cursors.Hand;
+            btnServerBadge.Click += (s, e) => ShowServerInfoDialog();
+            toolTips.SetToolTip(btnServerBadge, "ดูข้อมูลเชื่อมต่อ Central Print Server สำหรับให้เครื่องอื่นในวอร์ดสั่งพิมพ์มาที่นี่");
+            topBar.Controls.Add(btnServerBadge);
+
             btnTopHistory = new Button();
             btnTopHistory.Text = "📜 ประวัติพิมพ์";
             btnTopHistory.Size = new Size(100, 32);
@@ -239,7 +272,7 @@ namespace TUH_WristbandPrinter
 
             btnToggleSidebar = new Button();
             btnToggleSidebar.Text = "📌 แถบข้าง";
-            btnToggleSidebar.Size = new Size(110, 32);
+            btnToggleSidebar.Size = new Size(105, 32);
             btnToggleSidebar.BackColor = Color.FromArgb(41, 128, 185);
             btnToggleSidebar.ForeColor = Color.White;
             btnToggleSidebar.FlatStyle = FlatStyle.Flat;
@@ -295,7 +328,11 @@ namespace TUH_WristbandPrinter
             lblCurrentPrinterStatus.Text = "เครื่องพิมพ์: -";
             lblCurrentPrinterStatus.BorderSides = ToolStripStatusLabelBorderSides.Left;
 
-            statusStrip.Items.AddRange(new ToolStripItem[] { lblStatusMsg, lblCurrentPrinterStatus });
+            lblServerStatusStrip = new ToolStripStatusLabel();
+            lblServerStatusStrip.Text = "Print Server: กำลังเริ่ม";
+            lblServerStatusStrip.BorderSides = ToolStripStatusLabelBorderSides.Left;
+
+            statusStrip.Items.AddRange(new ToolStripItem[] { lblStatusMsg, lblCurrentPrinterStatus, lblServerStatusStrip });
             this.Controls.Add(statusStrip);
 
             // 3. Body Panel
@@ -730,10 +767,10 @@ namespace TUH_WristbandPrinter
             btnPreview.Click += (s, e) => ShowPreview();
             pnlPatientCard.Controls.Add(btnPreview);
 
-            // 2. Printer Settings Card (Compact height 114px)
+            // 2. Printer & Central Print Server Card (Height 165px)
             pnlPrinter = new Panel();
             pnlPrinter.Dock = DockStyle.Top;
-            pnlPrinter.Height = 114;
+            pnlPrinter.Height = 165;
             pnlPrinter.BackColor = Color.White;
             pnlPrinter.BorderStyle = BorderStyle.FixedSingle;
             pnlPrinter.Padding = new Padding(8);
@@ -741,28 +778,105 @@ namespace TUH_WristbandPrinter
             pnlPrinter.BringToFront();
 
             lblPrnTitle = new Label();
-            lblPrnTitle.Text = "⚙️ เครื่องพิมพ์:";
+            lblPrnTitle.Text = "⚙️ การสั่งพิมพ์:";
             lblPrnTitle.Font = new Font("Segoe UI", 8.5F, FontStyle.Bold);
             lblPrnTitle.Location = new Point(10, 6);
             lblPrnTitle.AutoSize = true;
             pnlPrinter.Controls.Add(lblPrnTitle);
 
+            rdoPrintLocal = new RadioButton();
+            rdoPrintLocal.Text = "เครื่องนี้ (Local)";
+            rdoPrintLocal.Font = new Font("Segoe UI", 8.5F, FontStyle.Bold);
+            rdoPrintLocal.ForeColor = Color.FromArgb(24, 76, 120);
+            rdoPrintLocal.Location = new Point(105, 4);
+            rdoPrintLocal.Size = new Size(115, 22);
+            rdoPrintLocal.Checked = true;
+            rdoPrintLocal.CheckedChanged += (s, e) => TogglePrintModeUI();
+            pnlPrinter.Controls.Add(rdoPrintLocal);
+
+            rdoPrintRemote = new RadioButton();
+            rdoPrintRemote.Text = "📡 เครื่องแม่ในวอร์ด (Server)";
+            rdoPrintRemote.Font = new Font("Segoe UI", 8.5F, FontStyle.Bold);
+            rdoPrintRemote.ForeColor = Color.FromArgb(4, 120, 87);
+            rdoPrintRemote.Location = new Point(220, 4);
+            rdoPrintRemote.Size = new Size(175, 22);
+            rdoPrintRemote.CheckedChanged += (s, e) => TogglePrintModeUI();
+            pnlPrinter.Controls.Add(rdoPrintRemote);
+
+            // Panel for Local Printer Selection
+            pnlLocalPrinter = new Panel();
+            pnlLocalPrinter.Location = new Point(10, 26);
+            pnlLocalPrinter.Size = new Size(350, 28);
+            pnlLocalPrinter.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
+            pnlPrinter.Controls.Add(pnlLocalPrinter);
+
             cboPrinters = new ComboBox();
-            cboPrinters.Location = new Point(10, 24);
-            cboPrinters.Size = new Size(350, 24);
-            cboPrinters.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
+            cboPrinters.Dock = DockStyle.Fill;
             cboPrinters.DropDownStyle = ComboBoxStyle.DropDownList;
             cboPrinters.Font = new Font("Segoe UI", 8.5F);
             cboPrinters.SelectedIndexChanged += (s, e) =>
             {
-                lblCurrentPrinterStatus.Text = "เครื่องพิมพ์: " + cboPrinters.SelectedItem;
+                if (rdoPrintLocal.Checked && cboPrinters.SelectedItem != null)
+                {
+                    lblCurrentPrinterStatus.Text = "เครื่องพิมพ์: " + cboPrinters.SelectedItem;
+                }
             };
-            pnlPrinter.Controls.Add(cboPrinters);
+            pnlLocalPrinter.Controls.Add(cboPrinters);
 
+            // Panel for Remote Print Server Selection
+            pnlRemotePrinter = new Panel();
+            pnlRemotePrinter.Location = new Point(10, 26);
+            pnlRemotePrinter.Size = new Size(350, 48);
+            pnlRemotePrinter.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
+            pnlRemotePrinter.Visible = false;
+            pnlPrinter.Controls.Add(pnlRemotePrinter);
+
+            txtRemoteHost = new TextBox();
+            txtRemoteHost.Location = new Point(0, 2);
+            txtRemoteHost.Size = new Size(155, 22);
+            txtRemoteHost.Font = new Font("Segoe UI", 8.5F);
+            toolTips.SetToolTip(txtRemoteHost, "ระบุ IP หรือชื่อคอมพิวเตอร์เครื่องแม่ในวอร์ด (เช่น 172.30.249.158 หรือ HP600G6-009)");
+            pnlRemotePrinter.Controls.Add(txtRemoteHost);
+
+            btnDiscoverServer = new Button();
+            btnDiscoverServer.Text = "🔍 ค้นหาเครื่องแม่";
+            btnDiscoverServer.Location = new Point(160, 0);
+            btnDiscoverServer.Size = new Size(108, 25);
+            btnDiscoverServer.BackColor = Color.FromArgb(241, 245, 249);
+            btnDiscoverServer.FlatStyle = FlatStyle.Flat;
+            btnDiscoverServer.FlatAppearance.BorderColor = Color.FromArgb(203, 213, 225);
+            btnDiscoverServer.Font = new Font("Segoe UI", 8F, FontStyle.Bold);
+            btnDiscoverServer.Cursor = Cursors.Hand;
+            btnDiscoverServer.Click += (s, e) => DoDiscoverServer();
+            toolTips.SetToolTip(btnDiscoverServer, "ค้นหาเครื่องแม่ในวงแลนของวอร์ดอัตโนมัติ (Auto-Discovery)");
+            pnlRemotePrinter.Controls.Add(btnDiscoverServer);
+
+            btnTestServer = new Button();
+            btnTestServer.Text = "⚡ ทดสอบ";
+            btnTestServer.Location = new Point(272, 0);
+            btnTestServer.Size = new Size(76, 25);
+            btnTestServer.BackColor = Color.FromArgb(241, 245, 249);
+            btnTestServer.FlatStyle = FlatStyle.Flat;
+            btnTestServer.FlatAppearance.BorderColor = Color.FromArgb(203, 213, 225);
+            btnTestServer.Font = new Font("Segoe UI", 8F, FontStyle.Bold);
+            btnTestServer.Cursor = Cursors.Hand;
+            btnTestServer.Click += (s, e) => DoTestServerConnection();
+            toolTips.SetToolTip(btnTestServer, "ทดสอบการเชื่อมต่อไปยังเครื่องแม่");
+            pnlRemotePrinter.Controls.Add(btnTestServer);
+
+            lblRemoteStatus = new Label();
+            lblRemoteStatus.Text = "พร้อมระบุ IP เครื่องแม่";
+            lblRemoteStatus.Font = new Font("Segoe UI", 8F);
+            lblRemoteStatus.ForeColor = Color.FromArgb(100, 116, 139);
+            lblRemoteStatus.Location = new Point(0, 28);
+            lblRemoteStatus.AutoSize = true;
+            pnlRemotePrinter.Controls.Add(lblRemoteStatus);
+
+            // Row 3: Print Options (Shared by both modes)
             rdoAdult = new RadioButton();
             rdoAdult.Text = "ผู้ใหญ่";
             rdoAdult.Font = new Font("Segoe UI", 8.5F);
-            rdoAdult.Location = new Point(10, 53);
+            rdoAdult.Location = new Point(10, 78);
             rdoAdult.Size = new Size(68, 22);
             rdoAdult.Checked = true;
             pnlPrinter.Controls.Add(rdoAdult);
@@ -770,19 +884,19 @@ namespace TUH_WristbandPrinter
             rdoChild = new RadioButton();
             rdoChild.Text = "เด็ก";
             rdoChild.Font = new Font("Segoe UI", 8.5F);
-            rdoChild.Location = new Point(80, 53);
+            rdoChild.Location = new Point(80, 78);
             rdoChild.Size = new Size(55, 22);
             pnlPrinter.Controls.Add(rdoChild);
 
             lblCopies = new Label();
             lblCopies.Text = "จำนวน:";
             lblCopies.Font = new Font("Segoe UI", 8.5F);
-            lblCopies.Location = new Point(145, 55);
+            lblCopies.Location = new Point(145, 80);
             lblCopies.AutoSize = true;
             pnlPrinter.Controls.Add(lblCopies);
 
             numCopies = new NumericUpDown();
-            numCopies.Location = new Point(190, 53);
+            numCopies.Location = new Point(190, 78);
             numCopies.Size = new Size(45, 22);
             numCopies.Font = new Font("Segoe UI", 8.5F);
             numCopies.Minimum = 1;
@@ -792,7 +906,7 @@ namespace TUH_WristbandPrinter
 
             btnSavePrinter = new Button();
             btnSavePrinter.Text = "💾 บันทึกเริ่มต้น";
-            btnSavePrinter.Location = new Point(245, 51);
+            btnSavePrinter.Location = new Point(245, 76);
             btnSavePrinter.Size = new Size(100, 26);
             btnSavePrinter.BackColor = Color.FromArgb(241, 245, 249);
             btnSavePrinter.FlatStyle = FlatStyle.Flat;
@@ -800,14 +914,15 @@ namespace TUH_WristbandPrinter
             btnSavePrinter.Cursor = Cursors.Hand;
             btnSavePrinter.Font = new Font("Segoe UI", 8.5F);
             btnSavePrinter.Click += (s, e) => SavePrinterConfig();
-            toolTips.SetToolTip(btnSavePrinter, "บันทึกเครื่องพิมพ์และจำนวนเป็นค่าเริ่มต้นของโปรแกรม");
+            toolTips.SetToolTip(btnSavePrinter, "บันทึกการตั้งค่าการพิมพ์เป็นค่าเริ่มต้นของโปรแกรม");
             pnlPrinter.Controls.Add(btnSavePrinter);
 
+            // Row 4: Checkbox
             chkAutoPrint = new CheckBox();
             chkAutoPrint.Text = "⚡ พิมพ์ทันทีเมื่อยิง HN/AN (Auto-print)";
             chkAutoPrint.Font = new Font("Segoe UI", 8.5F);
             chkAutoPrint.ForeColor = Color.FromArgb(71, 85, 105);
-            chkAutoPrint.Location = new Point(10, 82);
+            chkAutoPrint.Location = new Point(10, 108);
             chkAutoPrint.AutoSize = true;
             chkAutoPrint.CheckedChanged += (s, e) =>
             {
@@ -815,6 +930,15 @@ namespace TUH_WristbandPrinter
                 _config.Save();
             };
             pnlPrinter.Controls.Add(chkAutoPrint);
+
+            // Row 5: Server Notice
+            lblServerNotice = new Label();
+            lblServerNotice.Text = "💡 เครื่องนี้เปิด Print Server รับคำสั่งพิมพ์จากเครื่องอื่นในวอร์ดอัตโนมัติ";
+            lblServerNotice.Font = new Font("Segoe UI", 7.5F);
+            lblServerNotice.ForeColor = Color.FromArgb(100, 116, 139);
+            lblServerNotice.Location = new Point(10, 134);
+            lblServerNotice.AutoSize = true;
+            pnlPrinter.Controls.Add(lblServerNotice);
 
             // 3. History Panel
             pnlHist = new Panel();
@@ -868,6 +992,261 @@ namespace TUH_WristbandPrinter
                 }
             };
             pnlHist.Controls.Add(lstHistory);
+        }
+
+        private void TogglePrintModeUI()
+        {
+            if (rdoPrintRemote.Checked)
+            {
+                pnlLocalPrinter.Visible = false;
+                pnlRemotePrinter.Visible = true;
+                lblServerNotice.Visible = false;
+                lblCurrentPrinterStatus.Text = string.Format("เครื่องพิมพ์: [เครื่องแม่: {0}]", 
+                    string.IsNullOrEmpty(txtRemoteHost.Text) ? "ยังไม่ระบุ" : txtRemoteHost.Text);
+            }
+            else
+            {
+                pnlLocalPrinter.Visible = true;
+                pnlRemotePrinter.Visible = false;
+                lblServerNotice.Visible = true;
+                if (cboPrinters.SelectedItem != null)
+                {
+                    lblCurrentPrinterStatus.Text = "เครื่องพิมพ์: " + cboPrinters.SelectedItem;
+                }
+            }
+        }
+
+        private void LoadPrintModeConfig()
+        {
+            if (_config.PrintMode == "Remote")
+            {
+                rdoPrintRemote.Checked = true;
+                txtRemoteHost.Text = _config.RemoteServerHost ?? "";
+            }
+            else
+            {
+                rdoPrintLocal.Checked = true;
+                txtRemoteHost.Text = _config.RemoteServerHost ?? "";
+            }
+            TogglePrintModeUI();
+        }
+
+        private void DoDiscoverServer()
+        {
+            this.Cursor = Cursors.WaitCursor;
+            lblRemoteStatus.ForeColor = Color.FromArgb(24, 76, 120);
+            lblRemoteStatus.Text = "กำลังค้นหาเครื่องแม่ในวอร์ด...";
+            Application.DoEvents();
+
+            try
+            {
+                var discovered = PrintClientService.Instance.DiscoverServer(2500);
+                if (discovered != null)
+                {
+                    txtRemoteHost.Text = discovered.IP;
+                    lblRemoteStatus.ForeColor = Color.FromArgb(16, 149, 106);
+                    lblRemoteStatus.Text = string.Format("✓ พบ: {0} ({1}) เครื่องพิมพ์: {2}", 
+                        discovered.MachineName, discovered.IP, discovered.PrinterName);
+                    lblCurrentPrinterStatus.Text = string.Format("เครื่องพิมพ์: [เครื่องแม่: {0}]", discovered.IP);
+                    System.Media.SystemSounds.Asterisk.Play();
+                }
+                else
+                {
+                    lblRemoteStatus.ForeColor = Color.Crimson;
+                    lblRemoteStatus.Text = "ไม่พบเครื่องแม่ผ่านการค้นหาอัตโนมัติ (สามารถพิมพ์ระบุ IP หรือชื่อเครื่องด้วยตนเองได้)";
+                }
+            }
+            catch (Exception ex)
+            {
+                lblRemoteStatus.ForeColor = Color.Crimson;
+                lblRemoteStatus.Text = "ค้นหาผิดพลาด: " + ex.Message;
+            }
+            finally
+            {
+                this.Cursor = Cursors.Default;
+            }
+        }
+
+        private void DoTestServerConnection()
+        {
+            string host = txtRemoteHost.Text.Trim();
+            if (string.IsNullOrEmpty(host))
+            {
+                MessageBox.Show("กรุณาระบุ IP หรือชื่อคอมพิวเตอร์เครื่องแม่ก่อนกดทดสอบ", "แจ้งเตือน", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                txtRemoteHost.Focus();
+                return;
+            }
+
+            this.Cursor = Cursors.WaitCursor;
+            lblRemoteStatus.ForeColor = Color.FromArgb(24, 76, 120);
+            lblRemoteStatus.Text = "กำลังทดสอบเชื่อมต่อ...";
+            Application.DoEvents();
+
+            try
+            {
+                int port = _config.RemoteServerPort > 0 ? _config.RemoteServerPort : 8099;
+                var stat = PrintClientService.Instance.TestConnection(host, port);
+                lblRemoteStatus.ForeColor = Color.FromArgb(16, 149, 106);
+                lblRemoteStatus.Text = string.Format("✓ เชื่อมต่อสำเร็จ: {0} (เครื่องพิมพ์: {1})", 
+                    stat.MachineName, stat.SelectedPrinter ?? "พร้อม");
+                lblCurrentPrinterStatus.Text = string.Format("เครื่องพิมพ์: [เครื่องแม่: {0}]", host);
+                MessageBox.Show(string.Format("เชื่อมต่อไปยังเครื่องแม่สำเร็จ!\n\nชื่อเครื่อง: {0}\nIP: {1}\nเครื่องพิมพ์: {2}\nสถานะ: ออนไลน์พร้อมพิมพ์",
+                    stat.MachineName, stat.IP, stat.SelectedPrinter), "เชื่อมต่อสำเร็จ", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            }
+            catch (Exception ex)
+            {
+                lblRemoteStatus.ForeColor = Color.Crimson;
+                lblRemoteStatus.Text = "เชื่อมต่อล้มเหลว: " + ex.Message;
+                MessageBox.Show("ไม่สามารถเชื่อมต่อกับเครื่องแม่ได้:\n" + ex.Message + "\n\nโปรดตรวจสอบว่า:\n1. เครื่องแม่เปิดโปรแกรม TUH Wristband Printer อยู่หรือไม่\n2. หมายเลข IP ถูกต้องและต่อวงแลนเดียวกันหรือไม่", 
+                    "เชื่อมต่อล้มเหลว", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+            finally
+            {
+                this.Cursor = Cursors.Default;
+            }
+        }
+
+        private void StartPrintServerIfEnabled()
+        {
+            if (_config.EnablePrintServer)
+            {
+                try
+                {
+                    int port = _config.ServerPort > 0 ? _config.ServerPort : 8099;
+                    PrintServerService.Instance.Start(port, HandleRemotePrintRequest, HandleServerStatusRequest);
+                }
+                catch (Exception ex)
+                {
+                    lblServerStatusStrip.Text = "Print Server: ผิดพลาด (" + ex.Message + ")";
+                }
+            }
+        }
+
+        private void UpdateServerBadge()
+        {
+            if (PrintServerService.Instance.IsRunning)
+            {
+                string ip = PrintServerService.GetLocalIPAddress();
+                btnServerBadge.Text = "📡 Server: " + ip;
+                btnServerBadge.BackColor = Color.FromArgb(4, 120, 87); // Emerald
+                lblServerStatusStrip.Text = string.Format("Print Server: ออนไลน์ (IP: {0}:{1})", 
+                    ip, PrintServerService.Instance.Port);
+            }
+            else
+            {
+                btnServerBadge.Text = "📡 Print Server: ปิด";
+                btnServerBadge.BackColor = Color.FromArgb(100, 116, 139); // Slate
+                lblServerStatusStrip.Text = "Print Server: ปิดใช้งาน";
+            }
+        }
+
+        private PrintResponsePayload HandleRemotePrintRequest(PrintRequestPayload req)
+        {
+            PrintResponsePayload resp = new PrintResponsePayload { AN = req.AN };
+            try
+            {
+                WristbandType type = (req.Type == "Child" || req.Type == "เด็ก") ? WristbandType.Child : WristbandType.Adult;
+                DataStore ds;
+                PatientAdmission pt = EphisService.Instance.LoadWristband(req.AN, type, out ds);
+
+                string prn = "";
+                this.Invoke((MethodInvoker)delegate
+                {
+                    prn = cboPrinters.SelectedItem != null ? cboPrinters.SelectedItem.ToString() : "";
+                });
+
+                if (string.IsNullOrEmpty(prn)) prn = _config.SelectedPrinter;
+
+                int copies = req.Copies > 0 ? req.Copies : 1;
+                EphisService.Instance.PrintWristband(ds, prn, copies);
+
+                // Record to history on server machine
+                PrintHistoryRecord hist = new PrintHistoryRecord();
+                hist.AN = pt.AN;
+                hist.HN = pt.HN;
+                hist.PatientName = pt.PatientName;
+                hist.Gender = pt.Gender;
+                hist.Age = pt.Age;
+                hist.WardName = pt.WardName;
+                hist.RgtDate = pt.RgtDate;
+                hist.Allergy = pt.Allergy;
+                hist.WristbandType = (type == WristbandType.Adult) ? "ผู้ใหญ่" : "เด็ก";
+                hist.Copies = copies;
+                hist.PrinterName = prn;
+                hist.PrintedBy = string.Format("{0} [ส่งจาก: {1}]", req.ClientUser ?? "เครื่องลูก", req.ClientMachine ?? "เครือข่าย");
+                hist.Status = "พิมพ์จากเครื่องลูก";
+                PrintHistoryService.Instance.AddRecord(hist);
+
+                // Update UI on host machine
+                this.BeginInvoke((MethodInvoker)delegate
+                {
+                    LoadRecentHistoryList();
+                    lblStatusMsg.Text = string.Format("✓ ได้รับคำสั่งพิมพ์ AN: {0} จากเครื่อง [{1}] สำเร็จแล้ว", req.AN, req.ClientMachine);
+                    System.Media.SystemSounds.Asterisk.Play();
+                });
+
+                resp.Success = true;
+                resp.PatientName = pt.PatientName;
+                resp.Message = string.Format("พิมพ์สายรัดข้อมือ AN: {0} ({1}) สำเร็จแล้ว", req.AN, pt.PatientName);
+            }
+            catch (Exception ex)
+            {
+                resp.Success = false;
+                resp.Message = "พิมพ์ล้มเหลว: " + ex.Message;
+            }
+            return resp;
+        }
+
+        private ServerStatusPayload HandleServerStatusRequest()
+        {
+            string prn = "";
+            this.Invoke((MethodInvoker)delegate
+            {
+                prn = cboPrinters.SelectedItem != null ? cboPrinters.SelectedItem.ToString() : "";
+            });
+            return new ServerStatusPayload
+            {
+                Status = "online",
+                MachineName = Environment.MachineName,
+                IP = PrintServerService.GetLocalIPAddress(),
+                Port = PrintServerService.Instance.Port,
+                SelectedPrinter = prn,
+                Version = "1.2.0"
+            };
+        }
+
+        private void ShowServerInfoDialog()
+        {
+            string ip = PrintServerService.GetLocalIPAddress();
+            string machine = Environment.MachineName;
+            int port = PrintServerService.Instance.Port;
+            string prn = cboPrinters.SelectedItem != null ? cboPrinters.SelectedItem.ToString() : (_config.SelectedPrinter ?? "-");
+
+            string msg = string.Format(
+                "🏥 ข้อมูลระบบพิมพ์ส่วนกลาง (Central Print Server)\n\n" +
+                "• คอมพิวเตอร์เครื่องนี้ (Host Name):  {0}\n" +
+                "• หมายเลข IP เครื่องนี้:  {1}\n" +
+                "• พอร์ตบริการ (Port):  {2}\n" +
+                "• เครื่องพิมพ์ประจำเครื่อง:  {3}\n" +
+                "• สถานะ:  {4}\n\n" +
+                "📖 วิธีให้คอมเครื่องอื่นในวอร์ดพิมพ์มาที่เครื่องนี้:\n" +
+                "1. เปิดโปรแกรม TUH Wristband Printer ที่เครื่องอื่น\n" +
+                "2. ที่กล่องการสั่งพิมพ์ เลือก '📡 เครื่องแม่ในวอร์ด (Server)'\n" +
+                "3. กดปุ่ม '🔍 ค้นหาเครื่องแม่' (หรือพิมพ์ IP: {1})\n" +
+                "4. สามารถยิงบาร์โค้ดและกดพิมพ์มาที่เครื่องนี้ได้ทันที!\n\n" +
+                "ต้องการคัดลอก IP Address ({1}) ลง Clipboard หรือไม่?",
+                machine, ip, port, prn, PrintServerService.Instance.IsRunning ? "🟢 ออนไลน์ (พร้อมรับคำสั่งพิมพ์)" : "🔴 ปิด"
+            );
+
+            if (MessageBox.Show(msg, "ข้อมูล Central Print Server", MessageBoxButtons.YesNo, MessageBoxIcon.Information) == DialogResult.Yes)
+            {
+                try
+                {
+                    Clipboard.SetText(ip);
+                    MessageBox.Show("คัดลอกหมายเลข IP: " + ip + " เรียบร้อยแล้ว", "สำเร็จ", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                }
+                catch { }
+            }
         }
 
         private void SetSidebarMode(bool isSidebar)
@@ -934,7 +1313,7 @@ namespace TUH_WristbandPrinter
                 this.FormBorderStyle = FormBorderStyle.Sizable;
 
                 int normW = Math.Min(1100, workArea.Width - 40);
-                int normH = Math.Min(750, workArea.Height - 40);
+                int normH = Math.Min(760, workArea.Height - 40);
                 this.Size = new Size(normW, normH);
                 this.Location = new Point(
                     workArea.Left + (workArea.Width - normW) / 2,
@@ -1001,6 +1380,10 @@ namespace TUH_WristbandPrinter
                 btnTopHistory.Size = new Size(68, 28);
                 btnTopHistory.Text = "📜 ประวัติ";
                 btnTopHistory.Location = new Point(chkAlwaysOnTop.Left - btnTopHistory.Width - 6, 10);
+
+                btnServerBadge.Size = new Size(80, 28);
+                btnServerBadge.Text = "📡 Server";
+                btnServerBadge.Location = new Point(btnTopHistory.Left - btnServerBadge.Width - 6, 10);
             }
             else
             {
@@ -1012,10 +1395,16 @@ namespace TUH_WristbandPrinter
                 btnTopHistory.Text = "📜 ประวัติพิมพ์";
                 btnTopHistory.Location = new Point(chkAlwaysOnTop.Left - btnTopHistory.Width - 8, 12);
 
-                if (btnTopHistory.Left - lblAppTitle.Right > 130)
+                btnServerBadge.Size = new Size(150, 32);
+                btnServerBadge.Text = PrintServerService.Instance.IsRunning 
+                    ? ("📡 Server: " + PrintServerService.GetLocalIPAddress()) 
+                    : "📡 Print Server";
+                btnServerBadge.Location = new Point(btnTopHistory.Left - btnServerBadge.Width - 8, 12);
+
+                if (btnServerBadge.Left - lblAppTitle.Right > 130)
                 {
                     lblUser.Visible = true;
-                    lblUser.Location = new Point(btnTopHistory.Left - lblUser.Width - 8, 17);
+                    lblUser.Location = new Point(btnServerBadge.Left - lblUser.Width - 8, 17);
                 }
                 else
                 {
@@ -1106,7 +1495,8 @@ namespace TUH_WristbandPrinter
             int rW = pnlRightContainer.ClientSize.Width;
             if (rW > 0)
             {
-                cboPrinters.Width = Math.Max(180, rW - 20);
+                pnlLocalPrinter.Width = Math.Max(180, rW - 20);
+                pnlRemotePrinter.Width = Math.Max(180, rW - 20);
                 pnlAllergy.Width = Math.Max(180, rW - 20);
                 lstHistory.Width = Math.Max(180, rW - 20);
             }
@@ -1361,7 +1751,7 @@ namespace TUH_WristbandPrinter
                     dgvQueue.Rows[rowIdx].Cells[5].Style.Font = new Font(dgvQueue.Font, FontStyle.Bold);
                 }
 
-                if (item.Status == "พิมพ์สำเร็จ")
+                if (item.Status == "พิมพ์สำเร็จ" || item.Status == "ส่งเครื่องแม่สำเร็จ")
                 {
                     dgvQueue.Rows[rowIdx].Cells[7].Style.ForeColor = Color.FromArgb(16, 149, 106);
                     dgvQueue.Rows[rowIdx].Cells[7].Style.Font = new Font(dgvQueue.Font, FontStyle.Bold);
@@ -1407,6 +1797,50 @@ namespace TUH_WristbandPrinter
             }
         }
 
+        private bool PrintOnePatient(PatientAdmission patient, DataStore ds, WristbandType type, int copies, out string resultMsg)
+        {
+            if (rdoPrintRemote != null && rdoPrintRemote.Checked)
+            {
+                // REMOTE PRINT VIA CENTRAL PRINT SERVER
+                string host = txtRemoteHost.Text.Trim();
+                if (string.IsNullOrEmpty(host))
+                {
+                    resultMsg = "กรุณาระบุ IP หรือชื่อเครื่องแม่ในวอร์ด";
+                    return false;
+                }
+
+                PrintRequestPayload payload = new PrintRequestPayload
+                {
+                    AN = patient.AN,
+                    Type = (type == WristbandType.Adult) ? "Adult" : "Child",
+                    Copies = copies,
+                    ClientMachine = Environment.MachineName,
+                    ClientUser = _currentUser != null ? (_currentUser.DisplayName ?? _currentUser.UserId) : ""
+                };
+
+                int port = _config.RemoteServerPort > 0 ? _config.RemoteServerPort : 8099;
+                PrintResponsePayload resp = PrintClientService.Instance.SendPrintJob(host, port, payload);
+                if (resp != null && resp.Success)
+                {
+                    resultMsg = resp.Message ?? "ส่งพิมพ์สำเร็จ";
+                    return true;
+                }
+                else
+                {
+                    resultMsg = resp != null ? resp.Message : "ไม่ได้รับการตอบกลับจากเครื่องแม่";
+                    return false;
+                }
+            }
+            else
+            {
+                // LOCAL DIRECT PRINT
+                string prn = cboPrinters.SelectedItem != null ? cboPrinters.SelectedItem.ToString() : "";
+                EphisService.Instance.PrintWristband(ds, prn, copies);
+                resultMsg = string.Format("พิมพ์ออกเครื่องพิมพ์ {0} สำเร็จ", prn);
+                return true;
+            }
+        }
+
         private void DoPrintAll()
         {
             List<QueueItem> toPrint = _queue.FindAll(q => q.IsSelected);
@@ -1417,9 +1851,7 @@ namespace TUH_WristbandPrinter
                 return;
             }
 
-            string prn = cboPrinters.SelectedItem != null ? cboPrinters.SelectedItem.ToString() : "";
             int successCount = 0;
-
             this.Cursor = Cursors.WaitCursor;
 
             foreach (var item in toPrint)
@@ -1427,10 +1859,11 @@ namespace TUH_WristbandPrinter
                 lblStatusMsg.Text = string.Format("กำลังพิมพ์: {0} (AN: {1})...", item.Patient.PatientName, item.Patient.AN);
                 Application.DoEvents();
 
-                try
+                string printMsg;
+                bool ok = PrintOnePatient(item.Patient, item.DataStore, item.Type, item.Copies, out printMsg);
+                if (ok)
                 {
-                    EphisService.Instance.PrintWristband(item.DataStore, prn, item.Copies);
-                    item.Status = "พิมพ์สำเร็จ";
+                    item.Status = rdoPrintRemote.Checked ? "ส่งเครื่องแม่สำเร็จ" : "พิมพ์สำเร็จ";
                     successCount++;
 
                     // Record to persistent print history
@@ -1445,12 +1878,14 @@ namespace TUH_WristbandPrinter
                     rec.Allergy = item.Patient.Allergy;
                     rec.WristbandType = (item.Type == WristbandType.Adult) ? "ผู้ใหญ่" : "เด็ก";
                     rec.Copies = item.Copies;
-                    rec.PrinterName = prn;
+                    rec.PrinterName = rdoPrintRemote.Checked 
+                        ? ("[เครื่องแม่: " + txtRemoteHost.Text.Trim() + "]") 
+                        : (cboPrinters.SelectedItem != null ? cboPrinters.SelectedItem.ToString() : "");
                     rec.PrintedBy = _currentUser != null ? (_currentUser.DisplayName ?? _currentUser.UserId) : "";
-                    rec.Status = "พิมพ์สำเร็จ";
+                    rec.Status = rdoPrintRemote.Checked ? "ส่งพิมพ์ผ่านเครื่องแม่" : "พิมพ์สำเร็จ";
                     PrintHistoryService.Instance.AddRecord(rec);
                 }
-                catch (Exception)
+                else
                 {
                     item.Status = "ผิดพลาด";
                 }
@@ -1460,9 +1895,7 @@ namespace TUH_WristbandPrinter
             RefreshQueueGrid();
             LoadRecentHistoryList();
 
-            lblStatusMsg.Text = string.Format("✓ สั่งพิมพ์สำเร็จ {0}/{1} รายการ ออกเครื่องพิมพ์: {2}", 
-                successCount, toPrint.Count, prn);
-
+            lblStatusMsg.Text = string.Format("✓ ดำเนินการสำเร็จ {0}/{1} รายการ", successCount, toPrint.Count);
             txtSearch.Focus();
         }
 
@@ -1474,34 +1907,43 @@ namespace TUH_WristbandPrinter
                 return;
             }
 
-            string prn = cboPrinters.SelectedItem != null ? cboPrinters.SelectedItem.ToString() : "";
             int copies = (int)numCopies.Value;
+            WristbandType type = rdoAdult.Checked ? WristbandType.Adult : WristbandType.Child;
 
             try
             {
-                EphisService.Instance.PrintWristband(_currentDataStore, prn, copies);
+                string printMsg;
+                bool ok = PrintOnePatient(_currentPatient, _currentDataStore, type, copies, out printMsg);
+                if (ok)
+                {
+                    // Record to persistent print history
+                    PrintHistoryRecord rec = new PrintHistoryRecord();
+                    rec.AN = _currentPatient.AN;
+                    rec.HN = _currentPatient.HN;
+                    rec.PatientName = _currentPatient.PatientName;
+                    rec.Gender = _currentPatient.Gender;
+                    rec.Age = _currentPatient.Age;
+                    rec.WardName = _currentPatient.WardName;
+                    rec.RgtDate = _currentPatient.RgtDate;
+                    rec.Allergy = _currentPatient.Allergy;
+                    rec.WristbandType = rdoAdult.Checked ? "ผู้ใหญ่" : "เด็ก";
+                    rec.Copies = copies;
+                    rec.PrinterName = rdoPrintRemote.Checked 
+                        ? ("[เครื่องแม่: " + txtRemoteHost.Text.Trim() + "]") 
+                        : (cboPrinters.SelectedItem != null ? cboPrinters.SelectedItem.ToString() : "");
+                    rec.PrintedBy = _currentUser != null ? (_currentUser.DisplayName ?? _currentUser.UserId) : "";
+                    rec.Status = rdoPrintRemote.Checked ? "ส่งพิมพ์ผ่านเครื่องแม่" : "พิมพ์สำเร็จ";
+                    PrintHistoryService.Instance.AddRecord(rec);
 
-                // Record to persistent print history
-                PrintHistoryRecord rec = new PrintHistoryRecord();
-                rec.AN = _currentPatient.AN;
-                rec.HN = _currentPatient.HN;
-                rec.PatientName = _currentPatient.PatientName;
-                rec.Gender = _currentPatient.Gender;
-                rec.Age = _currentPatient.Age;
-                rec.WardName = _currentPatient.WardName;
-                rec.RgtDate = _currentPatient.RgtDate;
-                rec.Allergy = _currentPatient.Allergy;
-                rec.WristbandType = rdoAdult.Checked ? "ผู้ใหญ่" : "เด็ก";
-                rec.Copies = copies;
-                rec.PrinterName = prn;
-                rec.PrintedBy = _currentUser != null ? (_currentUser.DisplayName ?? _currentUser.UserId) : "";
-                rec.Status = "พิมพ์สำเร็จ";
-                PrintHistoryService.Instance.AddRecord(rec);
+                    LoadRecentHistoryList();
 
-                LoadRecentHistoryList();
-
-                lblStatusMsg.Text = string.Format("✓ พิมพ์สายรัดข้อมือ AN: {0} สำเร็จแล้ว ({1} ใบ)", 
-                    _currentPatient.AN, copies);
+                    lblStatusMsg.Text = string.Format("✓ สั่งพิมพ์สายรัดข้อมือ AN: {0} เรียบร้อยแล้ว ({1} ใบ)", 
+                        _currentPatient.AN, copies);
+                }
+                else
+                {
+                    MessageBox.Show("พิมพ์ผิดพลาด:\n" + printMsg, "ข้อผิดพลาด", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                }
             }
             catch (Exception ex)
             {
@@ -1525,30 +1967,39 @@ namespace TUH_WristbandPrinter
                         : WristbandType.Adult;
                     DataStore ds;
                     PatientAdmission pt = EphisService.Instance.LoadWristband(rec.AN, type, out ds);
-                    string prn = cboPrinters.SelectedItem != null ? cboPrinters.SelectedItem.ToString() : "";
-                    EphisService.Instance.PrintWristband(ds, prn, rec.Copies);
+                    
+                    string printMsg;
+                    bool ok = PrintOnePatient(pt, ds, type, rec.Copies, out printMsg);
+                    if (ok)
+                    {
+                        // Save reprint log
+                        PrintHistoryRecord newRec = new PrintHistoryRecord();
+                        newRec.AN = rec.AN;
+                        newRec.HN = rec.HN;
+                        newRec.PatientName = rec.PatientName;
+                        newRec.Gender = rec.Gender;
+                        newRec.Age = rec.Age;
+                        newRec.WardName = rec.WardName;
+                        newRec.RgtDate = rec.RgtDate;
+                        newRec.Allergy = rec.Allergy;
+                        newRec.WristbandType = rec.WristbandType;
+                        newRec.Copies = rec.Copies;
+                        newRec.PrinterName = rdoPrintRemote.Checked 
+                            ? ("[เครื่องแม่: " + txtRemoteHost.Text.Trim() + "]") 
+                            : (cboPrinters.SelectedItem != null ? cboPrinters.SelectedItem.ToString() : "");
+                        newRec.PrintedBy = _currentUser != null ? (_currentUser.DisplayName ?? _currentUser.UserId) : "";
+                        newRec.Status = "พิมพ์ซ้ำ";
+                        PrintHistoryService.Instance.AddRecord(newRec);
 
-                    // Save reprint log
-                    PrintHistoryRecord newRec = new PrintHistoryRecord();
-                    newRec.AN = rec.AN;
-                    newRec.HN = rec.HN;
-                    newRec.PatientName = rec.PatientName;
-                    newRec.Gender = rec.Gender;
-                    newRec.Age = rec.Age;
-                    newRec.WardName = rec.WardName;
-                    newRec.RgtDate = rec.RgtDate;
-                    newRec.Allergy = rec.Allergy;
-                    newRec.WristbandType = rec.WristbandType;
-                    newRec.Copies = rec.Copies;
-                    newRec.PrinterName = prn;
-                    newRec.PrintedBy = _currentUser != null ? (_currentUser.DisplayName ?? _currentUser.UserId) : "";
-                    newRec.Status = "พิมพ์ซ้ำ";
-                    PrintHistoryService.Instance.AddRecord(newRec);
+                        LoadRecentHistoryList();
 
-                    LoadRecentHistoryList();
-
-                    MessageBox.Show(string.Format("พิมพ์สายรัดข้อมือซ้ำสำหรับ:\n{0} (AN: {1})\nเรียบร้อยแล้ว", 
-                        rec.PatientName, rec.AN), "พิมพ์ซ้ำสำเร็จ", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                        MessageBox.Show(string.Format("พิมพ์สายรัดข้อมือซ้ำสำหรับ:\n{0} (AN: {1})\nเรียบร้อยแล้ว", 
+                            rec.PatientName, rec.AN), "พิมพ์ซ้ำสำเร็จ", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    }
+                    else
+                    {
+                        MessageBox.Show("พิมพ์ซ้ำผิดพลาด: " + printMsg, "ข้อผิดพลาด", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    }
                 }
                 catch (Exception ex)
                 {
@@ -1670,7 +2121,7 @@ namespace TUH_WristbandPrinter
                 cboPrinters.SelectedIndex = 0;
             }
 
-            if (cboPrinters.SelectedItem != null)
+            if (cboPrinters.SelectedItem != null && rdoPrintLocal != null && rdoPrintLocal.Checked)
             {
                 lblCurrentPrinterStatus.Text = "เครื่องพิมพ์: " + cboPrinters.SelectedItem;
             }
@@ -1678,16 +2129,23 @@ namespace TUH_WristbandPrinter
 
         private void SavePrinterConfig()
         {
+            _config.PrintMode = rdoPrintRemote.Checked ? "Remote" : "Local";
+            _config.RemoteServerHost = txtRemoteHost.Text.Trim();
             if (cboPrinters.SelectedItem != null)
             {
                 _config.SelectedPrinter = cboPrinters.SelectedItem.ToString();
-                _config.Copies = (int)numCopies.Value;
-                _config.DefaultType = rdoAdult.Checked ? "Adult" : "Child";
-                _config.Save();
-                MessageBox.Show(string.Format("บันทึกเครื่องพิมพ์เริ่มต้นเป็น:\n{0}\n(สำเนา: {1} ใบ) เรียบร้อยแล้ว", 
-                    _config.SelectedPrinter, _config.Copies), 
-                    "บันทึกสำเร็จ", MessageBoxButtons.OK, MessageBoxIcon.Information);
             }
+            _config.Copies = (int)numCopies.Value;
+            _config.DefaultType = rdoAdult.Checked ? "Adult" : "Child";
+            _config.Save();
+
+            string msg = rdoPrintRemote.Checked
+                ? string.Format("บันทึกการตั้งค่าเป็น 'ส่งพิมพ์ผ่านเครื่องแม่':\nIP เครื่องแม่: {0}\nสำเนา: {1} ใบ", 
+                    _config.RemoteServerHost, _config.Copies)
+                : string.Format("บันทึกการตั้งค่าเป็น 'พิมพ์ตรงจากเครื่องนี้':\nเครื่องพิมพ์: {0}\nสำเนา: {1} ใบ", 
+                    _config.SelectedPrinter, _config.Copies);
+
+            MessageBox.Show(msg, "บันทึกสำเร็จ", MessageBoxButtons.OK, MessageBoxIcon.Information);
         }
 
         private void Logout()

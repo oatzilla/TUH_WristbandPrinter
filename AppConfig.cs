@@ -18,6 +18,13 @@ namespace TUH_WristbandPrinter
         public string WindowMode { get; set; } // "Normal" or "Sidebar"
         public bool AlwaysOnTop { get; set; }
 
+        // Central Print Server settings
+        public string PrintMode { get; set; } // "Local" or "Remote"
+        public string RemoteServerHost { get; set; }
+        public int RemoteServerPort { get; set; }
+        public bool EnablePrintServer { get; set; }
+        public int ServerPort { get; set; }
+
         private static string ConfigPath
         {
             get
@@ -39,6 +46,12 @@ namespace TUH_WristbandPrinter
             EncryptedPassword = "";
             WindowMode = "Normal";
             AlwaysOnTop = false;
+
+            PrintMode = "Local";
+            RemoteServerHost = "";
+            RemoteServerPort = 8099;
+            EnablePrintServer = true;
+            ServerPort = 8099;
         }
 
         public static string EncryptSecret(string plain)
@@ -119,6 +132,24 @@ namespace TUH_WristbandPrinter
                                 bool top;
                                 if (bool.TryParse(val, out top)) config.AlwaysOnTop = top;
                                 break;
+                            case "printmode":
+                                config.PrintMode = val;
+                                break;
+                            case "remoteserverhost":
+                                config.RemoteServerHost = val;
+                                break;
+                            case "remoteserverport":
+                                int rp;
+                                if (int.TryParse(val, out rp) && rp > 0) config.RemoteServerPort = rp;
+                                break;
+                            case "enableprintserver":
+                                bool es;
+                                if (bool.TryParse(val, out es)) config.EnablePrintServer = es;
+                                break;
+                            case "serverport":
+                                int sp;
+                                if (int.TryParse(val, out sp) && sp > 0) config.ServerPort = sp;
+                                break;
                         }
                     }
                 }
@@ -144,6 +175,11 @@ namespace TUH_WristbandPrinter
                     sw.WriteLine("EncryptedPassword=" + (EncryptedPassword ?? ""));
                     sw.WriteLine("WindowMode=" + (WindowMode ?? "Normal"));
                     sw.WriteLine("AlwaysOnTop=" + AlwaysOnTop);
+                    sw.WriteLine("PrintMode=" + (PrintMode ?? "Local"));
+                    sw.WriteLine("RemoteServerHost=" + (RemoteServerHost ?? ""));
+                    sw.WriteLine("RemoteServerPort=" + RemoteServerPort);
+                    sw.WriteLine("EnablePrintServer=" + EnablePrintServer);
+                    sw.WriteLine("ServerPort=" + ServerPort);
                 }
             }
             catch { }
