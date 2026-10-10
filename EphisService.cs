@@ -327,7 +327,7 @@ namespace TUH_WristbandPrinter
                 writer.Options = options;
 
                 Bitmap bmp = writer.Write(qrText);
-                string tempPath = Path.Combine(Path.GetTempPath(), string.Format("{0}_qrcode.jpg", an));
+                string tempPath = Path.Combine(Path.GetTempPath(), string.Format("{0}_{1}_qrcode.jpg", an, Guid.NewGuid().ToString("N")));
                 if (File.Exists(tempPath))
                 {
                     try { File.Delete(tempPath); } catch { }

@@ -20,6 +20,10 @@ namespace TUH_WristbandPrinter
         // ToolTips
         private ToolTip toolTips;
 
+        // Printing state & debounce cooldown
+        private bool _isPrinting = false;
+        private Timer _printCooldownTimer;
+
         // Header controls
         private Panel topBar;
         private Label lblAppTitle;
@@ -908,7 +912,8 @@ namespace TUH_WristbandPrinter
             rdoAdult.Font = new Font("Segoe UI", 8.5F);
             rdoAdult.Location = new Point(10, 78);
             rdoAdult.Size = new Size(68, 22);
-            rdoAdult.Checked = true;
+            rdoAdult.Checked = (_config.DefaultType != "Child");
+            rdoAdult.CheckedChanged += (s, e) => { if (rdoAdult.Checked) OnWristbandTypeChanged(WristbandType.Adult); };
             pnlPrinter.Controls.Add(rdoAdult);
 
             rdoChild = new RadioButton();
@@ -916,6 +921,8 @@ namespace TUH_WristbandPrinter
             rdoChild.Font = new Font("Segoe UI", 8.5F);
             rdoChild.Location = new Point(80, 78);
             rdoChild.Size = new Size(55, 22);
+            rdoChild.Checked = (_config.DefaultType == "Child");
+            rdoChild.CheckedChanged += (s, e) => { if (rdoChild.Checked) OnWristbandTypeChanged(WristbandType.Child); };
             pnlPrinter.Controls.Add(rdoChild);
 
             lblCopies = new Label();
@@ -1180,15 +1187,27 @@ namespace TUH_WristbandPrinter
                 PatientAdmission pt = EphisService.Instance.LoadWristband(req.AN, type, out ds);
 
                 string prn = "";
+                int copies = req.Copies > 0 ? req.Copies : 1;
                 this.Invoke((MethodInvoker)delegate
                 {
                     prn = cboPrinters.SelectedItem != null ? cboPrinters.SelectedItem.ToString() : "";
+                    if (string.IsNullOrEmpty(prn)) prn = _config.SelectedPrinter;
+                    if (string.IsNullOrEmpty(prn))
+                    {
+                        foreach (var item in cboPrinters.Items)
+                        {
+                            string s = item.ToString();
+                            if (s.IndexOf("ZDesigner", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                                s.IndexOf("GT800", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                                s.IndexOf("Zebra", StringComparison.OrdinalIgnoreCase) >= 0)
+                            {
+                                prn = s;
+                                break;
+                            }
+                        }
+                    }
+                    EphisService.Instance.PrintWristband(ds, prn, copies);
                 });
-
-                if (string.IsNullOrEmpty(prn)) prn = _config.SelectedPrinter;
-
-                int copies = req.Copies > 0 ? req.Copies : 1;
-                EphisService.Instance.PrintWristband(ds, prn, copies);
 
                 // Record to history on server machine
                 PrintHistoryRecord hist = new PrintHistoryRecord();
@@ -1394,58 +1413,89 @@ namespace TUH_WristbandPrinter
         {
             if (topBar == null || pnlSearch == null || topQueue == null) return;
 
-            // 1. Top Bar dynamic layout (guarantees zero overlap)
+            // 1. Top Bar dynamic layout (guarantees zero overlap at ANY resolution)
             int tbW = topBar.ClientSize.Width;
-            btnLogout.Location = new Point(tbW - 66, 12);
-            btnToggleSidebar.Location = new Point(btnLogout.Left - btnToggleSidebar.Width - 8, 12);
-            chkAlwaysOnTop.Location = new Point(btnToggleSidebar.Left - chkAlwaysOnTop.Width - 6, 16);
 
             if (_isSidebarMode || tbW < 520)
             {
                 lblUser.Visible = false;
                 lblAppSub.Visible = false;
-                lblAppTitle.Text = "🏥 TUH Wristband";
-                lblAppTitle.Font = new Font("Segoe UI", 11F, FontStyle.Bold);
+                chkAlwaysOnTop.Visible = false;
+                lblAppTitle.Text = "🏥 TUH";
+                lblAppTitle.Font = new Font("Segoe UI", 10.5F, FontStyle.Bold);
+                lblAppTitle.Location = new Point(8, 12);
 
-                btnTopHistory.Size = new Size(68, 28);
-                btnTopHistory.Text = "📜 ประวัติ";
-                btnTopHistory.Location = new Point(chkAlwaysOnTop.Left - btnTopHistory.Width - 6, 10);
+                btnLogout.Size = new Size(42, 28);
+                btnLogout.Location = new Point(tbW - 46, 10);
 
-                btnServerBadge.Size = new Size(80, 28);
-                btnServerBadge.Text = "📡 Server";
-                btnServerBadge.Location = new Point(btnTopHistory.Left - btnServerBadge.Width - 6, 10);
+                btnToggleSidebar.Size = new Size(34, 28);
+                btnToggleSidebar.Text = "📌";
+                btnToggleSidebar.Location = new Point(btnLogout.Left - 38, 10);
 
-                btnCheckUpdate.Size = new Size(68, 28);
-                btnCheckUpdate.Location = new Point(btnServerBadge.Left - btnCheckUpdate.Width - 6, 10);
+                btnTopHistory.Size = new Size(34, 28);
+                btnTopHistory.Text = "📜";
+                btnTopHistory.Location = new Point(btnToggleSidebar.Left - 38, 10);
+
+                btnServerBadge.Size = new Size(34, 28);
+                btnServerBadge.Text = "📡";
+                btnServerBadge.Location = new Point(btnTopHistory.Left - 38, 10);
+
+                btnCheckUpdate.Size = new Size(34, 28);
+                btnCheckUpdate.Text = "↻";
+                btnCheckUpdate.Location = new Point(btnServerBadge.Left - 38, 10);
             }
             else
             {
-                lblAppTitle.Text = "🏥 ระบบพิมพ์สายรัดข้อมือผู้ป่วย (TUH Wristband)";
-                lblAppTitle.Font = new Font("Segoe UI", 12F, FontStyle.Bold);
-                lblAppSub.Visible = true;
+                chkAlwaysOnTop.Visible = true;
 
-                btnTopHistory.Size = new Size(100, 32);
-                btnTopHistory.Text = "📜 ประวัติพิมพ์";
-                btnTopHistory.Location = new Point(chkAlwaysOnTop.Left - btnTopHistory.Width - 8, 12);
-
-                btnServerBadge.Size = new Size(150, 32);
-                btnServerBadge.Text = PrintServerService.Instance.IsRunning 
-                    ? ("📡 Server: " + PrintServerService.GetLocalIPAddress()) 
-                    : "📡 Print Server";
-                btnServerBadge.Location = new Point(btnTopHistory.Left - btnServerBadge.Width - 8, 12);
-
-                btnCheckUpdate.Size = new Size(95, 32);
-                btnCheckUpdate.Location = new Point(btnServerBadge.Left - btnCheckUpdate.Width - 8, 12);
-
-                if (btnCheckUpdate.Left - lblAppTitle.Right > 130)
+                if (tbW >= 1050)
                 {
-                    lblUser.Visible = true;
-                    lblUser.Location = new Point(btnCheckUpdate.Left - lblUser.Width - 8, 17);
+                    lblAppTitle.Text = "🏥 ระบบพิมพ์สายรัดข้อมือผู้ป่วย (TUH Wristband)";
+                    lblAppTitle.Font = new Font("Segoe UI", 12F, FontStyle.Bold);
+                    lblAppTitle.Location = new Point(12, 8);
+                    lblAppSub.Text = "โรงพยาบาลธรรมศาสตร์เฉลิมพระเกียรติ | งานผู้ป่วยใน (IPD)";
+                    lblAppSub.Visible = true;
+                    lblAppSub.Location = new Point(14, 34);
                 }
                 else
                 {
-                    lblUser.Visible = false;
+                    lblAppTitle.Text = "🏥 TUH Wristband";
+                    lblAppTitle.Font = new Font("Segoe UI", 11.5F, FontStyle.Bold);
+                    lblAppTitle.Location = new Point(12, 10);
+                    lblAppSub.Visible = (tbW >= 780);
+                    lblAppSub.Location = new Point(14, 34);
                 }
+
+                // Row 1 (Top sub-row: Y=6, H=23)
+                btnLogout.Size = new Size(50, 23);
+                btnLogout.Location = new Point(tbW - 56, 6);
+
+                btnToggleSidebar.Size = new Size(78, 23);
+                btnToggleSidebar.Text = "📌 แถบข้าง";
+                btnToggleSidebar.Location = new Point(btnLogout.Left - 84, 6);
+
+                chkAlwaysOnTop.Size = new Size(74, 21);
+                chkAlwaysOnTop.Location = new Point(btnToggleSidebar.Left - 80, 7);
+
+                lblUser.Size = new Size(130, 21);
+                lblUser.Location = new Point(chkAlwaysOnTop.Left - 136, 7);
+                lblUser.Visible = (tbW >= 820);
+
+                // Row 2 (Bottom sub-row: Y=32, H=23)
+                btnTopHistory.Size = new Size(82, 23);
+                btnTopHistory.Text = "📜 ประวัติ";
+                btnTopHistory.Location = new Point(tbW - 88, 32);
+
+                int srvW = (tbW >= 1050) ? 140 : 86;
+                btnServerBadge.Size = new Size(srvW, 23);
+                btnServerBadge.Text = PrintServerService.Instance.IsRunning 
+                    ? (tbW >= 1050 ? ("📡 " + PrintServerService.GetLocalIPAddress()) : "📡 Online") 
+                    : "📡 ปิด";
+                btnServerBadge.Location = new Point(btnTopHistory.Left - srvW - 6, 32);
+
+                btnCheckUpdate.Size = new Size(72, 23);
+                btnCheckUpdate.Text = "↻ v" + UpdateService.CurrentVersion;
+                btnCheckUpdate.Location = new Point(btnServerBadge.Left - 78, 32);
             }
 
             // 2. Search Panel responsive sizing
@@ -1659,6 +1709,24 @@ namespace TUH_WristbandPrinter
             WristbandType type = rdoAdult.Checked ? WristbandType.Adult : WristbandType.Child;
             DataStore ds;
             PatientAdmission patient = EphisService.Instance.LoadWristband(an, type, out ds);
+
+            // Auto-detect Adult or Child based on patient age
+            int ageYears = ParseAgeYears(patient.Age);
+            WristbandType autoType = (ageYears >= 15 || string.IsNullOrEmpty(patient.Age))
+                ? WristbandType.Adult
+                : WristbandType.Child;
+
+            if (autoType != type)
+            {
+                type = autoType;
+                if (type == WristbandType.Adult) rdoAdult.Checked = true;
+                else rdoChild.Checked = true;
+                try
+                {
+                    patient = EphisService.Instance.LoadWristband(an, type, out ds);
+                }
+                catch { }
+            }
 
             // Supplement with search admission info if any field is empty
             PatientAdmission searched = _recentAdmissions != null ? _recentAdmissions.Find(a => a.AN == an) : null;
@@ -1897,111 +1965,208 @@ namespace TUH_WristbandPrinter
 
         private void DoPrintAll()
         {
+            if (_isPrinting) return;
+
             List<QueueItem> toPrint = _queue.FindAll(q => q.IsSelected);
             if (toPrint.Count == 0)
             {
-                MessageBox.Show("กรุณาเลือกรายการที่ต้องการพิมพ์ในคิวอย่างน้อย 1 รายการ", "แจ้งเตือน", 
+                MessageBox.Show("กรุณาเลือกรายการที่ต้องการพิมพ์ในคิวอย่างน้อย 1 รายการ", "แจ้งเตือน",
                     MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return;
             }
 
-            int successCount = 0;
+            _isPrinting = true;
+            btnPrintAll.Enabled = false;
+            btnPrintSingle.Enabled = false;
+            btnPreview.Enabled = false;
+
+            string origAllText = string.Format("🖨️  พิมพ์ทั้งหมดในคิว ({0} รายการ) [F9]", toPrint.Count);
+            Color origAllColor = btnPrintAll.BackColor;
+
+            btnPrintAll.Text = "⏳ กำลังส่งพิมพ์รายการทั้งหมดในคิว...";
+            btnPrintAll.BackColor = Color.FromArgb(217, 119, 6);
             this.Cursor = Cursors.WaitCursor;
+            Application.DoEvents();
 
-            foreach (var item in toPrint)
+            int successCount = 0;
+            try
             {
-                lblStatusMsg.Text = string.Format("กำลังพิมพ์: {0} (AN: {1})...", item.Patient.PatientName, item.Patient.AN);
-                Application.DoEvents();
-
-                string printMsg;
-                bool ok = PrintOnePatient(item.Patient, item.DataStore, item.Type, item.Copies, out printMsg);
-                if (ok)
+                for (int i = 0; i < toPrint.Count; i++)
                 {
-                    item.Status = rdoPrintRemote.Checked ? "ส่งเครื่องแม่สำเร็จ" : "พิมพ์สำเร็จ";
-                    successCount++;
+                    var item = toPrint[i];
+                    lblStatusMsg.Text = string.Format("⏳ กำลังพิมพ์ ({0}/{1}): {2} (AN: {3})...",
+                        i + 1, toPrint.Count, item.Patient.PatientName, item.Patient.AN);
+                    Application.DoEvents();
 
-                    // Record to persistent print history
-                    PrintHistoryRecord rec = new PrintHistoryRecord();
-                    rec.AN = item.Patient.AN;
-                    rec.HN = item.Patient.HN;
-                    rec.PatientName = item.Patient.PatientName;
-                    rec.Gender = item.Patient.Gender;
-                    rec.Age = item.Patient.Age;
-                    rec.WardName = item.Patient.WardName;
-                    rec.RgtDate = item.Patient.RgtDate;
-                    rec.Allergy = item.Patient.Allergy;
-                    rec.WristbandType = (item.Type == WristbandType.Adult) ? "ผู้ใหญ่" : "เด็ก";
-                    rec.Copies = item.Copies;
-                    rec.PrinterName = rdoPrintRemote.Checked 
-                        ? ("[เครื่องแม่: " + txtRemoteHost.Text.Trim() + "]") 
-                        : (cboPrinters.SelectedItem != null ? cboPrinters.SelectedItem.ToString() : "");
-                    rec.PrintedBy = _currentUser != null ? (_currentUser.DisplayName ?? _currentUser.UserId) : "";
-                    rec.Status = rdoPrintRemote.Checked ? "ส่งพิมพ์ผ่านเครื่องแม่" : "พิมพ์สำเร็จ";
-                    PrintHistoryService.Instance.AddRecord(rec);
+                    string printMsg;
+                    bool ok = PrintOnePatient(item.Patient, item.DataStore, item.Type, item.Copies, out printMsg);
+                    if (ok)
+                    {
+                        item.Status = (rdoPrintRemote != null && rdoPrintRemote.Checked) ? "ส่งเครื่องแม่สำเร็จ" : "พิมพ์สำเร็จ";
+                        successCount++;
+
+                        // Record to persistent print history
+                        PrintHistoryRecord rec = new PrintHistoryRecord();
+                        rec.AN = item.Patient.AN;
+                        rec.HN = item.Patient.HN;
+                        rec.PatientName = item.Patient.PatientName;
+                        rec.Gender = item.Patient.Gender;
+                        rec.Age = item.Patient.Age;
+                        rec.WardName = item.Patient.WardName;
+                        rec.RgtDate = item.Patient.RgtDate;
+                        rec.Allergy = item.Patient.Allergy;
+                        rec.WristbandType = (item.Type == WristbandType.Adult) ? "ผู้ใหญ่" : "เด็ก";
+                        rec.Copies = item.Copies;
+                        rec.PrinterName = (rdoPrintRemote != null && rdoPrintRemote.Checked)
+                            ? ("[เครื่องแม่: " + txtRemoteHost.Text.Trim() + "]")
+                            : (cboPrinters.SelectedItem != null ? cboPrinters.SelectedItem.ToString() : "");
+                        rec.PrintedBy = _currentUser != null ? (_currentUser.DisplayName ?? _currentUser.UserId) : "";
+                        rec.Status = (rdoPrintRemote != null && rdoPrintRemote.Checked) ? "ส่งพิมพ์ผ่านเครื่องแม่" : "พิมพ์สำเร็จ";
+                        PrintHistoryService.Instance.AddRecord(rec);
+                    }
+                    else
+                    {
+                        item.Status = "ผิดพลาด";
+                    }
+                    RefreshQueueGrid();
                 }
-                else
-                {
-                    item.Status = "ผิดพลาด";
-                }
+
+                btnPrintAll.Text = "✓ พิมพ์คิวทั้งหมดเรียบร้อยแล้ว!";
+                btnPrintAll.BackColor = Color.FromArgb(16, 185, 129);
+                lblStatusMsg.Text = string.Format("✓ ดำเนินการสำเร็จ {0}/{1} รายการ", successCount, toPrint.Count);
+                System.Media.SystemSounds.Asterisk.Play();
             }
-
-            this.Cursor = Cursors.Default;
-            RefreshQueueGrid();
-            LoadRecentHistoryList();
-
-            lblStatusMsg.Text = string.Format("✓ ดำเนินการสำเร็จ {0}/{1} รายการ", successCount, toPrint.Count);
-            txtSearch.Focus();
+            catch (Exception ex)
+            {
+                lblStatusMsg.Text = "✕ ข้อผิดพลาด: " + ex.Message;
+            }
+            finally
+            {
+                this.Cursor = Cursors.Default;
+                LoadRecentHistoryList();
+                if (_printCooldownTimer != null)
+                {
+                    _printCooldownTimer.Stop();
+                    _printCooldownTimer.Dispose();
+                }
+                _printCooldownTimer = new Timer();
+                _printCooldownTimer.Interval = 2500;
+                _printCooldownTimer.Tick += (s, e) =>
+                {
+                    _printCooldownTimer.Stop();
+                    _isPrinting = false;
+                    UpdateQueueCount();
+                    btnPrintAll.BackColor = origAllColor;
+                    btnPrintSingle.Enabled = (_currentPatient != null);
+                    btnPreview.Enabled = (_currentPatient != null);
+                };
+                _printCooldownTimer.Start();
+                txtSearch.Focus();
+            }
         }
 
         private void DoPrintSingle()
         {
+            if (_isPrinting) return; // Prevent duplicate clicks
+
             if (_currentPatient == null || _currentDataStore == null)
             {
                 MessageBox.Show("กรุณาเลือกผู้ป่วยก่อนสั่งพิมพ์", "แจ้งเตือน", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return;
             }
 
+            _isPrinting = true;
+            btnPrintSingle.Enabled = false;
+            btnPrintAll.Enabled = false;
+            btnPreview.Enabled = false;
+
+            string origSingleText = "🖨 พิมพ์รายการนี้";
+            Color origSingleColor = Color.FromArgb(4, 120, 87);
+
+            bool isRemote = (rdoPrintRemote != null && rdoPrintRemote.Checked);
+            btnPrintSingle.Text = isRemote ? "⏳ กำลังส่งพิมพ์ไปที่เครื่องแม่..." : "⏳ กำลังสั่งพิมพ์...";
+            btnPrintSingle.BackColor = Color.FromArgb(217, 119, 6); // Amber
+            lblStatusMsg.Text = isRemote 
+                ? string.Format("⏳ กำลังเชื่อมต่อเครื่องแม่และพิมพ์สายรัดข้อมือ AN: {0} ({1})...", _currentPatient.AN, _currentPatient.PatientName)
+                : string.Format("⏳ กำลังสั่งพิมพ์สายรัดข้อมือ AN: {0}...", _currentPatient.AN);
+            this.Cursor = Cursors.WaitCursor;
+            Application.DoEvents();
+
             int copies = (int)numCopies.Value;
             WristbandType type = rdoAdult.Checked ? WristbandType.Adult : WristbandType.Child;
+            PatientAdmission pt = _currentPatient;
+            DataStore ds = _currentDataStore;
 
             try
             {
                 string printMsg;
-                bool ok = PrintOnePatient(_currentPatient, _currentDataStore, type, copies, out printMsg);
+                bool ok = PrintOnePatient(pt, ds, type, copies, out printMsg);
                 if (ok)
                 {
                     // Record to persistent print history
                     PrintHistoryRecord rec = new PrintHistoryRecord();
-                    rec.AN = _currentPatient.AN;
-                    rec.HN = _currentPatient.HN;
-                    rec.PatientName = _currentPatient.PatientName;
-                    rec.Gender = _currentPatient.Gender;
-                    rec.Age = _currentPatient.Age;
-                    rec.WardName = _currentPatient.WardName;
-                    rec.RgtDate = _currentPatient.RgtDate;
-                    rec.Allergy = _currentPatient.Allergy;
-                    rec.WristbandType = rdoAdult.Checked ? "ผู้ใหญ่" : "เด็ก";
+                    rec.AN = pt.AN;
+                    rec.HN = pt.HN;
+                    rec.PatientName = pt.PatientName;
+                    rec.Gender = pt.Gender;
+                    rec.Age = pt.Age;
+                    rec.WardName = pt.WardName;
+                    rec.RgtDate = pt.RgtDate;
+                    rec.Allergy = pt.Allergy;
+                    rec.WristbandType = (type == WristbandType.Adult) ? "ผู้ใหญ่" : "เด็ก";
                     rec.Copies = copies;
-                    rec.PrinterName = rdoPrintRemote.Checked 
-                        ? ("[เครื่องแม่: " + txtRemoteHost.Text.Trim() + "]") 
+                    rec.PrinterName = isRemote
+                        ? ("[เครื่องแม่: " + txtRemoteHost.Text.Trim() + "]")
                         : (cboPrinters.SelectedItem != null ? cboPrinters.SelectedItem.ToString() : "");
                     rec.PrintedBy = _currentUser != null ? (_currentUser.DisplayName ?? _currentUser.UserId) : "";
-                    rec.Status = rdoPrintRemote.Checked ? "ส่งพิมพ์ผ่านเครื่องแม่" : "พิมพ์สำเร็จ";
+                    rec.Status = isRemote ? "ส่งพิมพ์ผ่านเครื่องแม่" : "พิมพ์สำเร็จ";
                     PrintHistoryService.Instance.AddRecord(rec);
 
                     LoadRecentHistoryList();
 
-                    lblStatusMsg.Text = string.Format("✓ สั่งพิมพ์สายรัดข้อมือ AN: {0} เรียบร้อยแล้ว ({1} ใบ)", 
-                        _currentPatient.AN, copies);
+                    btnPrintSingle.Text = isRemote ? "✓ เครื่องแม่พิมพ์เรียบร้อย!" : "✓ พิมพ์สำเร็จแล้ว!";
+                    btnPrintSingle.BackColor = Color.FromArgb(16, 185, 129); // Emerald
+                    lblStatusMsg.Text = string.Format("✓ สั่งพิมพ์สายรัดข้อมือ AN: {0} เรียบร้อยแล้ว ({1} ใบ)", pt.AN, copies);
+                    System.Media.SystemSounds.Asterisk.Play();
                 }
                 else
                 {
+                    btnPrintSingle.Text = "✕ สั่งพิมพ์ไม่สำเร็จ";
+                    btnPrintSingle.BackColor = Color.FromArgb(220, 38, 38);
+                    lblStatusMsg.Text = "✕ พิมพ์ผิดพลาด: " + printMsg;
+                    System.Media.SystemSounds.Hand.Play();
                     MessageBox.Show("พิมพ์ผิดพลาด:\n" + printMsg, "ข้อผิดพลาด", MessageBoxButtons.OK, MessageBoxIcon.Error);
                 }
             }
             catch (Exception ex)
             {
+                btnPrintSingle.Text = "✕ สั่งพิมพ์ไม่สำเร็จ";
+                btnPrintSingle.BackColor = Color.FromArgb(220, 38, 38);
+                lblStatusMsg.Text = "✕ พิมพ์ผิดพลาด: " + ex.Message;
+                System.Media.SystemSounds.Hand.Play();
                 MessageBox.Show("พิมพ์ผิดพลาด: " + ex.Message, "ข้อผิดพลาด", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+            finally
+            {
+                this.Cursor = Cursors.Default;
+                if (_printCooldownTimer != null)
+                {
+                    _printCooldownTimer.Stop();
+                    _printCooldownTimer.Dispose();
+                }
+                _printCooldownTimer = new Timer();
+                _printCooldownTimer.Interval = 2500;
+                _printCooldownTimer.Tick += (s, e) =>
+                {
+                    _printCooldownTimer.Stop();
+                    _isPrinting = false;
+                    btnPrintSingle.Text = origSingleText;
+                    btnPrintSingle.BackColor = origSingleColor;
+                    btnPrintSingle.Enabled = (_currentPatient != null);
+                    btnPrintAll.Enabled = (_queue.FindAll(q => q.IsSelected).Count > 0);
+                    btnPreview.Enabled = (_currentPatient != null);
+                };
+                _printCooldownTimer.Start();
             }
         }
 
@@ -2112,6 +2277,46 @@ namespace TUH_WristbandPrinter
 
             btnPrintSingle.Enabled = true;
             btnPreview.Enabled = true;
+        }
+
+        private void OnWristbandTypeChanged(WristbandType newType)
+        {
+            _config.DefaultType = (newType == WristbandType.Adult) ? "Adult" : "Child";
+            if (_currentPatient != null && !_isPrinting)
+            {
+                try
+                {
+                    DataStore newDs;
+                    _currentPatient = EphisService.Instance.LoadWristband(_currentPatient.AN, newType, out newDs);
+                    _currentDataStore = newDs;
+                    QueueItem item = _queue.Find(q => q.Patient.AN == _currentPatient.AN);
+                    if (item != null)
+                    {
+                        item.Type = newType;
+                        item.DataStore = newDs;
+                    }
+                    lblStatusMsg.Text = string.Format("✓ สลับรูปแบบป้ายสายรัดข้อมือเป็น: {0}",
+                        newType == WristbandType.Adult ? "ผู้ใหญ่ (dw_doc_sticker_listband_001)" : "เด็ก (dw_doc_sticker_listband_child)");
+                }
+                catch (Exception ex)
+                {
+                    lblStatusMsg.Text = "⚠️ โหลดรูปแบบป้ายไม่สำเร็จ: " + ex.Message;
+                }
+            }
+        }
+
+        private int ParseAgeYears(string ageStr)
+        {
+            if (string.IsNullOrEmpty(ageStr)) return 0;
+            string s = ageStr.Trim();
+            int idx = 0;
+            while (idx < s.Length && char.IsDigit(s[idx])) idx++;
+            if (idx > 0)
+            {
+                int y;
+                if (int.TryParse(s.Substring(0, idx), out y)) return y;
+            }
+            return 0;
         }
 
         private void ResetPatientView()
