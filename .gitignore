@@ -1,0 +1,21 @@
+﻿# Binaries & build outputs
+bin/TUH_WristbandPrinter.exe
+bin/TUH_WristbandPrinter_new.exe
+*.obj
+*.pdb
+*.tmp
+*_qrcode.jpg
+*.bak
+
+# User credentials & sensitive hospital configs
+bin/printer_config.ini
+printer_config.ini
+
+# Patient Clinical Data (PDPA Compliance)
+bin/print_history.json
+print_history.json
+
+# Visual Studio & IDE files
+.vs/
+*.user
+*.suo
