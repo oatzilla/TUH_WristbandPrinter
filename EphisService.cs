@@ -185,6 +185,74 @@ namespace TUH_WristbandPrinter
             return list;
         }
 
+        #region Safe DataStore Helper Methods
+
+        private static bool HasColumn(DataStore ds, string colName)
+        {
+            if (ds == null || string.IsNullOrEmpty(colName)) return false;
+            try
+            {
+                string desc = ds.Describe(colName + ".Name");
+                if (!string.IsNullOrEmpty(desc) && desc != "!" && desc != "?")
+                    return true;
+            }
+            catch { }
+            return false;
+        }
+
+        private static string SafeGetString(DataStore ds, int row, string colName, string defVal = "")
+        {
+            if (ds == null || row <= 0 || row > ds.RowCount) return defVal;
+            try
+            {
+                if (HasColumn(ds, colName) && !ds.IsItemNull(row, colName))
+                {
+                    string val = ds.GetItemString(row, colName);
+                    return val != null ? val : defVal;
+                }
+            }
+            catch { }
+            return defVal;
+        }
+
+        private static double SafeGetDouble(DataStore ds, int row, string colName, double defVal = 0)
+        {
+            if (ds == null || row <= 0 || row > ds.RowCount) return defVal;
+            try
+            {
+                if (HasColumn(ds, colName) && !ds.IsItemNull(row, colName))
+                {
+                    return ds.GetItemDouble(row, colName);
+                }
+            }
+            catch { }
+            return defVal;
+        }
+
+        private static string SafeGetDate(DataStore ds, int row, string colName, string format = "dd/MM/yyyy")
+        {
+            if (ds == null || row <= 0 || row > ds.RowCount) return "";
+            try
+            {
+                if (HasColumn(ds, colName) && !ds.IsItemNull(row, colName))
+                {
+                    return ds.GetItemDateTime(row, colName).ToString(format);
+                }
+            }
+            catch
+            {
+                try
+                {
+                    string s = ds.GetItemString(row, colName);
+                    return s ?? "";
+                }
+                catch { }
+            }
+            return "";
+        }
+
+        #endregion
+
         public PatientAdmission LoadWristband(long an, WristbandType type, out DataStore dataStore)
         {
             InitializeRemoting();
@@ -209,40 +277,36 @@ namespace TUH_WristbandPrinter
             ds.SetFullState(ret[0].FullState);
 
             PatientAdmission patient = new PatientAdmission();
-            patient.AN = (long)ds.GetItemDouble(1, "an");
-            patient.HN = (long)ds.GetItemDouble(1, "hn");
-            patient.PatientName = ds.GetItemString(1, "dspname");
+            patient.AN = (long)SafeGetDouble(ds, 1, "an", an);
+            patient.HN = (long)SafeGetDouble(ds, 1, "hn", 0);
+            patient.PatientName = SafeGetString(ds, 1, "dspname", "");
 
-            if (!ds.IsItemNull(1, "pt_dspname"))
-                patient.WardName = ds.GetItemString(1, "pt_dspname");
+            // Ward name
+            patient.WardName = SafeGetString(ds, 1, "pt_dspname", "");
+            if (string.IsNullOrEmpty(patient.WardName))
+                patient.WardName = SafeGetString(ds, 1, "wardname", "");
 
-            if (!ds.IsItemNull(1, "age"))
-                patient.Age = ds.GetItemString(1, "age");
+            patient.Age = SafeGetString(ds, 1, "age", "");
+            patient.Gender = SafeGetString(ds, 1, "male_name", "");
+            patient.IdCard = SafeGetString(ds, 1, "ptno_pt_idc", "");
+            patient.RgtDate = SafeGetDate(ds, 1, "rgtdate", "dd/MM/yyyy");
 
-            if (!ds.IsItemNull(1, "male_name"))
-                patient.Gender = ds.GetItemString(1, "male_name");
+            // Patient type / rights
+            patient.PtTypeName = SafeGetString(ds, 1, "pttypenm", "");
+            if (string.IsNullOrEmpty(patient.PtTypeName))
+                patient.PtTypeName = SafeGetString(ds, 1, "pttype_name", "");
 
-            if (!ds.IsItemNull(1, "ptno_pt_idc"))
-                patient.IdCard = ds.GetItemString(1, "ptno_pt_idc");
-
-            try
-            {
-                patient.RgtDate = ds.GetItemDateTime(1, "rgtdate").ToString("dd/MM/yyyy");
-            }
-            catch { }
-
-            if (!ds.IsItemNull(1, "pttypenm"))
-                patient.PtTypeName = ds.GetItemString(1, "pttypenm");
-
-            if (!ds.IsItemNull(1, "allergynm"))
-                patient.Allergy = ds.GetItemString(1, "allergynm");
-            else
+            // Allergy
+            patient.Allergy = SafeGetString(ds, 1, "allergynm", "-");
+            if (string.IsNullOrEmpty(patient.Allergy))
+                patient.Allergy = SafeGetString(ds, 1, "allergy", "-");
+            if (string.IsNullOrEmpty(patient.Allergy))
                 patient.Allergy = "-";
 
             // QR Code Generation
-            string qrText = "";
-            if (!ds.IsItemNull(1, "s_qrcode"))
-                qrText = ds.GetItemString(1, "s_qrcode").Trim();
+            string qrText = SafeGetString(ds, 1, "s_qrcode", "").Trim();
+            if (string.IsNullOrEmpty(qrText))
+                qrText = SafeGetString(ds, 1, "qrcode", "").Trim();
             if (string.IsNullOrEmpty(qrText))
                 qrText = an.ToString();
 

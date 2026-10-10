@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Drawing;
 using System.Drawing.Printing;
@@ -1623,6 +1623,16 @@ namespace TUH_WristbandPrinter
             WristbandType type = rdoAdult.Checked ? WristbandType.Adult : WristbandType.Child;
             DataStore ds;
             PatientAdmission patient = EphisService.Instance.LoadWristband(an, type, out ds);
+
+            // Supplement with search admission info if any field is empty
+            PatientAdmission searched = _recentAdmissions != null ? _recentAdmissions.Find(a => a.AN == an) : null;
+            if (searched != null)
+            {
+                if (patient.HN <= 0) patient.HN = searched.HN;
+                if (string.IsNullOrEmpty(patient.PatientName)) patient.PatientName = searched.PatientName;
+                if (string.IsNullOrEmpty(patient.WardName)) patient.WardName = searched.WardName;
+                if (string.IsNullOrEmpty(patient.RgtDate)) patient.RgtDate = searched.RgtDate;
+            }
 
             // Double check by HN as well (prevent duplicate row for same patient under another admission)
             QueueItem existingHn = _queue.Find(q => q.Patient.HN == patient.HN);
