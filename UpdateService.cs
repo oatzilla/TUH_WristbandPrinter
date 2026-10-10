@@ -24,7 +24,7 @@ namespace TUH_WristbandPrinter
 
     public class UpdateService
     {
-        public const string CurrentVersion = "1.4.0";
+        public const string CurrentVersion = "1.4.1";
         public const string GitHubVersionUrl = "https://raw.githubusercontent.com/oatzilla/TUH_WristbandPrinter/main/version.json";
 
         private static UpdateService _instance;

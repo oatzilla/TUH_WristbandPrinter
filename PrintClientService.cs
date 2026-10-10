@@ -147,7 +147,8 @@ namespace TUH_WristbandPrinter
 
             string url = string.Format("http://{0}:{1}/api/print", host.Trim(), port);
             HttpWebRequest req = (HttpWebRequest)WebRequest.Create(url);
-            req.Timeout = 12000; // Allow 12 seconds for remoting & print execution
+            req.Timeout = 40000; // Allow 40 seconds
+            req.ReadWriteTimeout = 40000;
             req.Method = "POST";
             req.ContentType = "application/json; charset=utf-8";
 

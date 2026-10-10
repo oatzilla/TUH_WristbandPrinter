@@ -257,9 +257,8 @@ namespace TUH_WristbandPrinter
         {
             InitializeRemoting();
 
-            string dwName = (type == WristbandType.Adult) 
-                ? "dw_doc_sticker_listband_001" 
-                : "dw_doc_sticker_listband_child";
+            // Always use Adult sticker dw_doc_sticker_listband_001 matching E-PHIS directly
+            string dwName = "dw_doc_sticker_listband_001";
 
             RemoteDw[] remoteDws = new RemoteDw[1];
             remoteDws[0] = new RemoteDw();

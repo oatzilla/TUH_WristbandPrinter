@@ -114,7 +114,7 @@ namespace TUH_WristbandPrinter
                                 if (bool.TryParse(val, out auto)) config.AutoPrintOnScan = auto;
                                 break;
                             case "defaulttype":
-                                config.DefaultType = val;
+                                config.DefaultType = "Adult"; // Enforce Adult
                                 break;
                             case "lastuserid":
                                 config.LastUserId = val;

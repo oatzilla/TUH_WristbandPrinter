@@ -1,6 +1,6 @@
 {
-  "version": "1.4.0",
+  "version": "1.4.1",
   "releaseDate": "2026-10-10",
-  "changelog": "แก้เมนูด้านบนทับซ้อน, ปรับรูปแบบป้ายตรงตาม E-PHIS อัตโนมัติตามช่วงอายุ, แสดงสถานะกำลังส่งพิมพ์และป้องกันการกดซ้ำ",
+  "changelog": "บังคับใช้รูปแบบสายรัดข้อมือผู้ใหญ่ (dw_doc_sticker_listband_001) เท่านั้นตาม E-PHIS, และปรับระบบส่งพิมพ์ผ่านเครื่องแม่ให้ตอบกลับรวดเร็วและไม่หมดเวลา Timeout",
   "downloadUrl": "https://raw.githubusercontent.com/oatzilla/TUH_WristbandPrinter/main/bin/TUH_WristbandPrinter.exe"
 }

@@ -906,22 +906,23 @@ namespace TUH_WristbandPrinter
             lblRemoteStatus.AutoSize = true;
             pnlRemotePrinter.Controls.Add(lblRemoteStatus);
 
-            // Row 3: Print Options (Shared by both modes)
+            // Row 3: Print Options (Shared by both modes - Enforce Adult only)
             rdoAdult = new RadioButton();
-            rdoAdult.Text = "ผู้ใหญ่";
-            rdoAdult.Font = new Font("Segoe UI", 8.5F);
+            rdoAdult.Text = "ผู้ใหญ่ (001)";
+            rdoAdult.Font = new Font("Segoe UI", 8.5F, FontStyle.Bold);
             rdoAdult.Location = new Point(10, 78);
-            rdoAdult.Size = new Size(68, 22);
-            rdoAdult.Checked = (_config.DefaultType != "Child");
+            rdoAdult.Size = new Size(110, 22);
+            rdoAdult.Checked = true;
             rdoAdult.CheckedChanged += (s, e) => { if (rdoAdult.Checked) OnWristbandTypeChanged(WristbandType.Adult); };
             pnlPrinter.Controls.Add(rdoAdult);
 
             rdoChild = new RadioButton();
             rdoChild.Text = "เด็ก";
             rdoChild.Font = new Font("Segoe UI", 8.5F);
-            rdoChild.Location = new Point(80, 78);
+            rdoChild.Location = new Point(125, 78);
             rdoChild.Size = new Size(55, 22);
-            rdoChild.Checked = (_config.DefaultType == "Child");
+            rdoChild.Checked = false;
+            rdoChild.Visible = false; // Hide child option completely
             rdoChild.CheckedChanged += (s, e) => { if (rdoChild.Checked) OnWristbandTypeChanged(WristbandType.Child); };
             pnlPrinter.Controls.Add(rdoChild);
 
@@ -1182,61 +1183,67 @@ namespace TUH_WristbandPrinter
             PrintResponsePayload resp = new PrintResponsePayload { AN = req.AN };
             try
             {
-                WristbandType type = (req.Type == "Child" || req.Type == "เด็ก") ? WristbandType.Child : WristbandType.Adult;
+                // Enforce Adult format 100% matching E-PHIS (dw_doc_sticker_listband_001)
+                WristbandType type = WristbandType.Adult;
                 DataStore ds;
                 PatientAdmission pt = EphisService.Instance.LoadWristband(req.AN, type, out ds);
 
                 string prn = "";
                 int copies = req.Copies > 0 ? req.Copies : 1;
-                this.Invoke((MethodInvoker)delegate
-                {
-                    prn = cboPrinters.SelectedItem != null ? cboPrinters.SelectedItem.ToString() : "";
-                    if (string.IsNullOrEmpty(prn)) prn = _config.SelectedPrinter;
-                    if (string.IsNullOrEmpty(prn))
-                    {
-                        foreach (var item in cboPrinters.Items)
-                        {
-                            string s = item.ToString();
-                            if (s.IndexOf("ZDesigner", StringComparison.OrdinalIgnoreCase) >= 0 ||
-                                s.IndexOf("GT800", StringComparison.OrdinalIgnoreCase) >= 0 ||
-                                s.IndexOf("Zebra", StringComparison.OrdinalIgnoreCase) >= 0)
-                            {
-                                prn = s;
-                                break;
-                            }
-                        }
-                    }
-                    EphisService.Instance.PrintWristband(ds, prn, copies);
-                });
 
-                // Record to history on server machine
-                PrintHistoryRecord hist = new PrintHistoryRecord();
-                hist.AN = pt.AN;
-                hist.HN = pt.HN;
-                hist.PatientName = pt.PatientName;
-                hist.Gender = pt.Gender;
-                hist.Age = pt.Age;
-                hist.WardName = pt.WardName;
-                hist.RgtDate = pt.RgtDate;
-                hist.Allergy = pt.Allergy;
-                hist.WristbandType = (type == WristbandType.Adult) ? "ผู้ใหญ่" : "เด็ก";
-                hist.Copies = copies;
-                hist.PrinterName = prn;
-                hist.PrintedBy = string.Format("{0} [ส่งจาก: {1}]", req.ClientUser ?? "เครื่องลูก", req.ClientMachine ?? "เครือข่าย");
-                hist.Status = "พิมพ์จากเครื่องลูก";
-                PrintHistoryService.Instance.AddRecord(hist);
-
-                // Update UI on host machine
+                // Dispatch printing to UI thread asynchronously so client receives instant response
                 this.BeginInvoke((MethodInvoker)delegate
                 {
-                    LoadRecentHistoryList();
-                    lblStatusMsg.Text = string.Format("✓ ได้รับคำสั่งพิมพ์ AN: {0} จากเครื่อง [{1}] สำเร็จแล้ว", req.AN, req.ClientMachine);
-                    System.Media.SystemSounds.Asterisk.Play();
+                    try
+                    {
+                        prn = cboPrinters.SelectedItem != null ? cboPrinters.SelectedItem.ToString() : "";
+                        if (string.IsNullOrEmpty(prn)) prn = _config.SelectedPrinter;
+                        if (string.IsNullOrEmpty(prn))
+                        {
+                            foreach (var item in cboPrinters.Items)
+                            {
+                                string s = item.ToString();
+                                if (s.IndexOf("ZDesigner", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                                    s.IndexOf("GT800", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                                    s.IndexOf("Zebra", StringComparison.OrdinalIgnoreCase) >= 0)
+                                {
+                                    prn = s;
+                                    break;
+                                }
+                            }
+                        }
+                        EphisService.Instance.PrintWristband(ds, prn, copies);
+
+                        // Record to history on server machine
+                        PrintHistoryRecord hist = new PrintHistoryRecord();
+                        hist.AN = pt.AN;
+                        hist.HN = pt.HN;
+                        hist.PatientName = pt.PatientName;
+                        hist.Gender = pt.Gender;
+                        hist.Age = pt.Age;
+                        hist.WardName = pt.WardName;
+                        hist.RgtDate = pt.RgtDate;
+                        hist.Allergy = pt.Allergy;
+                        hist.WristbandType = "ผู้ใหญ่";
+                        hist.Copies = copies;
+                        hist.PrinterName = prn;
+                        hist.PrintedBy = string.Format("{0} [ส่งจาก: {1}]", req.ClientUser ?? "เครื่องลูก", req.ClientMachine ?? "เครือข่าย");
+                        hist.Status = "พิมพ์จากเครื่องลูก";
+                        PrintHistoryService.Instance.AddRecord(hist);
+
+                        LoadRecentHistoryList();
+                        lblStatusMsg.Text = string.Format("✓ ได้รับคำสั่งพิมพ์ AN: {0} ({1}) จากเครื่อง [{2}] สำเร็จแล้ว", req.AN, pt.PatientName, req.ClientMachine);
+                        System.Media.SystemSounds.Asterisk.Play();
+                    }
+                    catch (Exception ex)
+                    {
+                        lblStatusMsg.Text = string.Format("✕ เครื่องแม่พิมพ์ AN: {0} ล้มเหลว: {1}", req.AN, ex.Message);
+                    }
                 });
 
                 resp.Success = true;
                 resp.PatientName = pt.PatientName;
-                resp.Message = string.Format("พิมพ์สายรัดข้อมือ AN: {0} ({1}) สำเร็จแล้ว", req.AN, pt.PatientName);
+                resp.Message = string.Format("ส่งพิมพ์สายรัดข้อมือ AN: {0} ({1}) เรียบร้อยแล้ว", req.AN, pt.PatientName);
             }
             catch (Exception ex)
             {
@@ -1705,28 +1712,12 @@ namespace TUH_WristbandPrinter
                 return;
             }
 
-            // Load from database
-            WristbandType type = rdoAdult.Checked ? WristbandType.Adult : WristbandType.Child;
+            // Load from database (Enforce Adult format only)
+            WristbandType type = WristbandType.Adult;
             DataStore ds;
             PatientAdmission patient = EphisService.Instance.LoadWristband(an, type, out ds);
-
-            // Auto-detect Adult or Child based on patient age
-            int ageYears = ParseAgeYears(patient.Age);
-            WristbandType autoType = (ageYears >= 15 || string.IsNullOrEmpty(patient.Age))
-                ? WristbandType.Adult
-                : WristbandType.Child;
-
-            if (autoType != type)
-            {
-                type = autoType;
-                if (type == WristbandType.Adult) rdoAdult.Checked = true;
-                else rdoChild.Checked = true;
-                try
-                {
-                    patient = EphisService.Instance.LoadWristband(an, type, out ds);
-                }
-                catch { }
-            }
+            rdoAdult.Checked = true;
+            rdoChild.Checked = false;
 
             // Supplement with search admission info if any field is empty
             PatientAdmission searched = _recentAdmissions != null ? _recentAdmissions.Find(a => a.AN == an) : null;
@@ -1926,7 +1917,7 @@ namespace TUH_WristbandPrinter
                 PrintRequestPayload payload = new PrintRequestPayload
                 {
                     AN = patient.AN,
-                    Type = (type == WristbandType.Adult) ? "Adult" : "Child",
+                    Type = "Adult",
                     Copies = copies,
                     ClientMachine = Environment.MachineName,
                     ClientUser = _currentUser != null ? (_currentUser.DisplayName ?? _currentUser.UserId) : ""
