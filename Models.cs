@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using Sybase.DataWindow;
 
 namespace TUH_WristbandPrinter
