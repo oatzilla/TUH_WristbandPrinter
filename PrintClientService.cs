@@ -39,6 +39,41 @@ namespace TUH_WristbandPrinter
 
         private const int DiscoveryPort = 8098;
 
+                static PrintClientService()
+        {
+            EnableUnsafeHeaderParsing();
+        }
+
+        public static bool EnableUnsafeHeaderParsing()
+        {
+            try
+            {
+                var a = typeof(System.Net.Configuration.SettingsSection).Assembly;
+                var t = a.GetType("System.Net.Configuration.SettingsSectionInternal");
+                if (t != null)
+                {
+                    var instance = t.InvokeMember("Section",
+                        System.Reflection.BindingFlags.Static |
+                        System.Reflection.BindingFlags.GetProperty |
+                        System.Reflection.BindingFlags.NonPublic,
+                        null, null, new object[0]);
+                    if (instance != null)
+                    {
+                        var prop = t.GetField("useUnsafeHeaderParsing",
+                            System.Reflection.BindingFlags.NonPublic |
+                            System.Reflection.BindingFlags.Instance);
+                        if (prop != null)
+                        {
+                            prop.SetValue(instance, true);
+                            return true;
+                        }
+                    }
+                }
+            }
+            catch { }
+            return false;
+        }
+
         private PrintClientService() { }
 
         public DiscoveredServerInfo DiscoverServer(int timeoutMs = 2500)
@@ -126,11 +161,33 @@ namespace TUH_WristbandPrinter
                 reqStream.Write(bodyBytes, 0, bodyBytes.Length);
             }
 
-            using (HttpWebResponse res = (HttpWebResponse)req.GetResponse())
-            using (StreamReader sr = new StreamReader(res.GetResponseStream(), Encoding.UTF8))
+            req.KeepAlive = false;
+
+            try
             {
-                string resJson = sr.ReadToEnd();
-                return serializer.Deserialize<PrintResponsePayload>(resJson);
+                using (HttpWebResponse res = (HttpWebResponse)req.GetResponse())
+                using (StreamReader sr = new StreamReader(res.GetResponseStream(), Encoding.UTF8))
+                {
+                    string resJson = sr.ReadToEnd();
+                    return serializer.Deserialize<PrintResponsePayload>(resJson);
+                }
+            }
+            catch (WebException wex)
+            {
+                if (wex.Response != null)
+                {
+                    try
+                    {
+                        using (StreamReader sr = new StreamReader(wex.Response.GetResponseStream(), Encoding.UTF8))
+                        {
+                            string resJson = sr.ReadToEnd();
+                            var errResp = serializer.Deserialize<PrintResponsePayload>(resJson);
+                            if (errResp != null) return errResp;
+                        }
+                    }
+                    catch { }
+                }
+                throw;
             }
         }
     }

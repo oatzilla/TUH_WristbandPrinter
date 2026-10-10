@@ -1851,7 +1851,7 @@ namespace TUH_WristbandPrinter
                 string host = txtRemoteHost.Text.Trim();
                 if (string.IsNullOrEmpty(host))
                 {
-                    resultMsg = "กรุณาระบุ IP หรือชื่อเครื่องแม่ในวอร์ด";
+                    resultMsg = "กรุณาระบุ IP หรือชื่อเครื่องแม่";
                     return false;
                 }
 
@@ -1864,16 +1864,24 @@ namespace TUH_WristbandPrinter
                     ClientUser = _currentUser != null ? (_currentUser.DisplayName ?? _currentUser.UserId) : ""
                 };
 
-                int port = _config.RemoteServerPort > 0 ? _config.RemoteServerPort : 8099;
-                PrintResponsePayload resp = PrintClientService.Instance.SendPrintJob(host, port, payload);
-                if (resp != null && resp.Success)
+                try
                 {
-                    resultMsg = resp.Message ?? "ส่งพิมพ์สำเร็จ";
-                    return true;
+                    int port = _config.RemoteServerPort > 0 ? _config.RemoteServerPort : 8099;
+                    PrintResponsePayload resp = PrintClientService.Instance.SendPrintJob(host, port, payload);
+                    if (resp != null && resp.Success)
+                    {
+                        resultMsg = resp.Message ?? "ส่งพิมพ์สำเร็จ";
+                        return true;
+                    }
+                    else
+                    {
+                        resultMsg = resp != null ? resp.Message : "ไม่ได้รับการตอบรับจากเครื่องแม่";
+                        return false;
+                    }
                 }
-                else
+                catch (Exception ex)
                 {
-                    resultMsg = resp != null ? resp.Message : "ไม่ได้รับการตอบกลับจากเครื่องแม่";
+                    resultMsg = "เชื่อมต่อเครื่องแม่ไม่สำเร็จ: " + ex.Message;
                     return false;
                 }
             }
@@ -1882,7 +1890,7 @@ namespace TUH_WristbandPrinter
                 // LOCAL DIRECT PRINT
                 string prn = cboPrinters.SelectedItem != null ? cboPrinters.SelectedItem.ToString() : "";
                 EphisService.Instance.PrintWristband(ds, prn, copies);
-                resultMsg = string.Format("พิมพ์ออกเครื่องพิมพ์ {0} สำเร็จ", prn);
+                resultMsg = string.Format("พิมพ์ออกเครื่อง {0} สำเร็จ", prn);
                 return true;
             }
         }

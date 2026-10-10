@@ -168,8 +168,8 @@ namespace TUH_WristbandPrinter
             try
             {
                 using (NetworkStream stream = client.GetStream())
-                using (StreamReader reader = new StreamReader(stream, Encoding.UTF8))
-                using (StreamWriter writer = new StreamWriter(stream, Encoding.UTF8) { AutoFlush = true })
+                using (StreamReader reader = new StreamReader(stream, new UTF8Encoding(false)))
+                using (StreamWriter writer = new StreamWriter(stream, new UTF8Encoding(false)) { AutoFlush = true, NewLine = "\r\n" })
                 {
                     string requestLine = reader.ReadLine();
                     if (string.IsNullOrEmpty(requestLine)) return;
@@ -310,8 +310,7 @@ namespace TUH_WristbandPrinter
                         }
 
                         string respJson = serializer.Serialize(resp);
-                        int statusCode = resp.Success ? 200 : 500;
-                        SendHttpResponse(writer, statusCode, resp.Success ? "OK" : "Error", "application/json", respJson);
+                        SendHttpResponse(writer, 200, "OK", "application/json", respJson);
                     }
                     else
                     {

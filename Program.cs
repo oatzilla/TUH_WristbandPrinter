@@ -10,6 +10,11 @@ namespace TUH_WristbandPrinter
         {
             Application.EnableVisualStyles();
             Application.SetCompatibleTextRenderingDefault(false);
+            Application.SetUnhandledExceptionMode(UnhandledExceptionMode.CatchException);
+            Application.ThreadException += (s, e) =>
+            {
+                MessageBox.Show("ข้อผิดพลาดในการทำงาน:\n" + e.Exception.Message, "แจ้งเตือน", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            };
 
             try
             {
