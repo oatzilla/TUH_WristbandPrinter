@@ -35,9 +35,10 @@ namespace TUH_WristbandPrinter
         private Panel pnlQueueContainer;
         private Panel pnlRightContainer;
 
-        // Search controls
+        // Search controls (Ultra-prominent High-visibility Barcode/HN Scanner)
         private Label lblSearchTitle;
         private Label lblSearchHint;
+        private Label lblBarcodeBadge;
         private TextBox txtSearch;
         private Button btnSearch;
         private Button btnClear;
@@ -329,24 +330,38 @@ namespace TUH_WristbandPrinter
             lblSearchTitle = new Label();
             lblSearchTitle.Text = "🔍 ระบุหมายเลข HN หรือ AN ผู้ป่วย (ยิงบาร์โค้ดได้ทันที):";
             lblSearchTitle.Font = new Font("Segoe UI", 10.5F, FontStyle.Bold);
-            lblSearchTitle.ForeColor = Color.FromArgb(24, 76, 120);
+            lblSearchTitle.ForeColor = Color.FromArgb(15, 23, 42);
             lblSearchTitle.Location = new Point(12, 6);
             lblSearchTitle.AutoSize = true;
             pnlSearch.Controls.Add(lblSearchTitle);
 
             lblSearchHint = new Label();
-            lblSearchHint.Text = "[ ⚡ ยิงบาร์โค้ดได้ทันที  |  ⌨️ Enter: เพิ่มเข้าคิว  |  Esc: ล้าง ]";
+            lblSearchHint.Text = "[ ⚡ ช่องสแกนสีเหลืองเด่นชัด  |  ⌨️ Enter: เพิ่มเข้าคิว  |  Esc: ล้าง ]";
             lblSearchHint.Font = new Font("Segoe UI", 8.5F, FontStyle.Bold);
-            lblSearchHint.ForeColor = Color.FromArgb(100, 116, 139);
+            lblSearchHint.ForeColor = Color.FromArgb(180, 83, 9); // Warm Amber
             lblSearchHint.Location = new Point(375, 8);
             lblSearchHint.AutoSize = true;
             pnlSearch.Controls.Add(lblSearchHint);
 
+            // High-contrast Badge in front of textbox
+            lblBarcodeBadge = new Label();
+            lblBarcodeBadge.Text = "HN / AN";
+            lblBarcodeBadge.Font = new Font("Segoe UI", 10F, FontStyle.Bold);
+            lblBarcodeBadge.BackColor = Color.FromArgb(24, 76, 120); // Medical Navy
+            lblBarcodeBadge.ForeColor = Color.White;
+            lblBarcodeBadge.TextAlign = ContentAlignment.MiddleCenter;
+            lblBarcodeBadge.Location = new Point(12, 29);
+            lblBarcodeBadge.Size = new Size(72, 38);
+            pnlSearch.Controls.Add(lblBarcodeBadge);
+
+            // High-visibility Canary Yellow Barcode Scanner Box
             txtSearch = new TextBox();
-            txtSearch.Location = new Point(12, 30);
-            txtSearch.Size = new Size(270, 36);
-            txtSearch.Font = new Font("Segoe UI", 15F, FontStyle.Bold);
+            txtSearch.Location = new Point(88, 30);
+            txtSearch.Size = new Size(250, 36);
+            txtSearch.Font = new Font("Segoe UI", 15.5F, FontStyle.Bold);
             txtSearch.ForeColor = Color.FromArgb(15, 23, 42);
+            txtSearch.BackColor = Color.FromArgb(254, 249, 195); // High-visibility Soft Canary Yellow (#FEF9C3)
+            txtSearch.BorderStyle = BorderStyle.FixedSingle;
             txtSearch.KeyDown += (s, e) =>
             {
                 if (e.KeyCode == Keys.Enter)
@@ -357,18 +372,20 @@ namespace TUH_WristbandPrinter
             };
             txtSearch.Enter += (s, e) =>
             {
-                txtSearch.BackColor = Color.FromArgb(239, 246, 255);
+                txtSearch.BackColor = Color.FromArgb(254, 240, 138); // Glowing Bright Sun Yellow (#FEF08A)
+                lblBarcodeBadge.BackColor = Color.FromArgb(16, 149, 106); // Emerald Green highlight indicating "READY TO SCAN"
             };
             txtSearch.Leave += (s, e) =>
             {
-                txtSearch.BackColor = Color.White;
+                txtSearch.BackColor = Color.FromArgb(254, 249, 195); // Soft yellow
+                lblBarcodeBadge.BackColor = Color.FromArgb(24, 76, 120); // Medical Navy
             };
-            toolTips.SetToolTip(txtSearch, "พิมพ์หรือยิงบาร์โค้ด HN / AN แล้วกด Enter เพื่อค้นหาและเพิ่มเข้าคิว");
+            toolTips.SetToolTip(txtSearch, "ช่องสแกนบาร์โค้ด / ระบุหมายเลข HN หรือ AN (กด Enter เพื่อค้นหาและเพิ่มเข้าคิว)");
             pnlSearch.Controls.Add(txtSearch);
 
             btnSearch = new Button();
             btnSearch.Text = "＋ เพิ่มเข้าคิว [Enter]";
-            btnSearch.Location = new Point(292, 28);
+            btnSearch.Location = new Point(346, 29);
             btnSearch.Size = new Size(135, 38);
             btnSearch.BackColor = Color.FromArgb(24, 76, 120);
             btnSearch.ForeColor = Color.White;
@@ -383,7 +400,7 @@ namespace TUH_WristbandPrinter
             // Clear Button - High-visibility Crisp Red
             btnClear = new Button();
             btnClear.Text = "✕ ล้างข้อมูล [Esc]";
-            btnClear.Location = new Point(435, 28);
+            btnClear.Location = new Point(489, 29);
             btnClear.Size = new Size(115, 38);
             btnClear.BackColor = Color.FromArgb(220, 38, 38); // Crisp Crimson Red
             btnClear.ForeColor = Color.White;
@@ -399,7 +416,7 @@ namespace TUH_WristbandPrinter
 
             btnHistorySearch = new Button();
             btnHistorySearch.Text = "📜 ประวัติพิมพ์ (F4)";
-            btnHistorySearch.Location = new Point(558, 28);
+            btnHistorySearch.Location = new Point(612, 29);
             btnHistorySearch.Size = new Size(125, 38);
             btnHistorySearch.BackColor = Color.FromArgb(71, 85, 105);
             btnHistorySearch.ForeColor = Color.White;
@@ -416,13 +433,13 @@ namespace TUH_WristbandPrinter
             lblAdmissionsPrompt.Text = "เลือก Admit:";
             lblAdmissionsPrompt.Font = new Font("Segoe UI", 9F, FontStyle.Bold);
             lblAdmissionsPrompt.ForeColor = Color.FromArgb(180, 83, 9);
-            lblAdmissionsPrompt.Location = new Point(695, 8);
+            lblAdmissionsPrompt.Location = new Point(748, 8);
             lblAdmissionsPrompt.AutoSize = true;
             lblAdmissionsPrompt.Visible = false;
             pnlSearch.Controls.Add(lblAdmissionsPrompt);
 
             cboAdmissions = new ComboBox();
-            cboAdmissions.Location = new Point(695, 30);
+            cboAdmissions.Location = new Point(748, 30);
             cboAdmissions.Size = new Size(270, 28);
             cboAdmissions.DropDownStyle = ComboBoxStyle.DropDownList;
             cboAdmissions.Font = new Font("Segoe UI", 9.5F);
@@ -1014,18 +1031,23 @@ namespace TUH_WristbandPrinter
                 lblSearchHint.Visible = false;
                 btnHistorySearch.Visible = false;
 
-                int btnW = 75;
+                lblBarcodeBadge.Size = new Size(54, 36);
+                lblBarcodeBadge.Location = new Point(8, 28);
+                lblBarcodeBadge.Text = "HN/AN";
+                lblBarcodeBadge.Font = new Font("Segoe UI", 9F, FontStyle.Bold);
+
+                int btnW = 72;
                 btnSearch.Size = new Size(btnW, 36);
                 btnSearch.Text = "＋ คิว";
                 btnClear.Size = new Size(btnW, 36);
                 btnClear.Text = "✕ ล้าง";
 
-                int searchBoxW = Math.Max(110, sW - (btnW * 2) - 34);
-                txtSearch.Location = new Point(10, 28);
+                int searchBoxW = Math.Max(95, sW - lblBarcodeBadge.Width - (btnW * 2) - 34);
+                txtSearch.Location = new Point(lblBarcodeBadge.Right + 4, 28);
                 txtSearch.Size = new Size(searchBoxW, 36);
 
-                btnSearch.Location = new Point(txtSearch.Right + 6, 28);
-                btnClear.Location = new Point(btnSearch.Right + 6, 28);
+                btnSearch.Location = new Point(txtSearch.Right + 5, 28);
+                btnClear.Location = new Point(btnSearch.Right + 5, 28);
 
                 if (cboAdmissions.Visible)
                 {
@@ -1046,8 +1068,13 @@ namespace TUH_WristbandPrinter
                 lblSearchHint.Location = new Point(lblSearchTitle.Right + 12, 8);
                 btnHistorySearch.Visible = true;
 
-                txtSearch.Location = new Point(12, 30);
-                txtSearch.Size = new Size(270, 36);
+                lblBarcodeBadge.Size = new Size(72, 38);
+                lblBarcodeBadge.Location = new Point(12, 29);
+                lblBarcodeBadge.Text = "HN / AN";
+                lblBarcodeBadge.Font = new Font("Segoe UI", 10F, FontStyle.Bold);
+
+                txtSearch.Location = new Point(lblBarcodeBadge.Right + 4, 30);
+                txtSearch.Size = new Size(250, 36);
 
                 btnSearch.Size = new Size(135, 38);
                 btnSearch.Text = "＋ เพิ่มเข้าคิว [Enter]";
