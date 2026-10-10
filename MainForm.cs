@@ -2061,10 +2061,18 @@ namespace TUH_WristbandPrinter
                     RefreshQueueGrid();
                 }
 
+                // Remove successfully printed items from queue
+                _queue.RemoveAll(q => q.IsSelected && (q.Status == "พิมพ์สำเร็จ" || q.Status == "ส่งเครื่องแม่สำเร็จ"));
+                RefreshQueueGrid();
+
+                // Clear search and patient details immediately
+                ClearSearchAndActivePatient();
+
                 btnPrintAll.Text = "✓ พิมพ์คิวทั้งหมดเรียบร้อยแล้ว!";
                 btnPrintAll.BackColor = Color.FromArgb(16, 185, 129);
-                lblStatusMsg.Text = string.Format("✓ ดำเนินการสำเร็จ {0}/{1} รายการ", successCount, toPrint.Count);
+                lblStatusMsg.Text = string.Format("✓ ดำเนินการสำเร็จ {0}/{1} รายการ - ล้างข้อมูลพร้อมสแกนรายต่อไป", successCount, toPrint.Count);
                 System.Media.SystemSounds.Asterisk.Play();
+                txtSearch.Focus();
             }
             catch (Exception ex)
             {
@@ -2154,10 +2162,18 @@ namespace TUH_WristbandPrinter
 
                     LoadRecentHistoryList();
 
+                    // Remove from queue if present
+                    _queue.RemoveAll(q => q.Patient.AN == pt.AN);
+                    RefreshQueueGrid();
+
+                    // Clear search and active patient details immediately
+                    ClearSearchAndActivePatient();
+
                     btnPrintSingle.Text = isRemote ? "✓ เครื่องแม่พิมพ์เรียบร้อย!" : "✓ พิมพ์สำเร็จแล้ว!";
                     btnPrintSingle.BackColor = Color.FromArgb(16, 185, 129); // Emerald
-                    lblStatusMsg.Text = string.Format("✓ สั่งพิมพ์สายรัดข้อมือ AN: {0} เรียบร้อยแล้ว ({1} ใบ)", pt.AN, copies);
+                    lblStatusMsg.Text = string.Format("✓ สั่งพิมพ์สายรัดข้อมือ AN: {0} ({1}) เรียบร้อยแล้ว ({2} ใบ) - ล้างข้อมูลพร้อมสแกนรายต่อไป", pt.AN, pt.PatientName, copies);
                     System.Media.SystemSounds.Asterisk.Play();
+                    txtSearch.Focus();
                 }
                 else
                 {

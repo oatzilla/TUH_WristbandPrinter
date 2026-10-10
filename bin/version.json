@@ -1,6 +1,6 @@
 {
-  "version": "1.4.2",
+  "version": "1.4.3",
   "releaseDate": "2026-10-10",
-  "changelog": "ปรับตำแหน่งปุ่มลบที่เลือกและล้างคิวให้อยู่ติดกับจำนวนคิว มองเห็นชัดเจนไม่ถูกบัง และรองรับการย่อขยายหน้าต่าง",
+  "changelog": "เมื่อกดพิมพ์สำเร็จจะล้างข้อมูลผู้ป่วยและช่องค้นหาให้อัตโนมัติทันที พร้อมรับการยิงบาร์โค้ดผู้ป่วยรายต่อไป",
   "downloadUrl": "https://raw.githubusercontent.com/oatzilla/TUH_WristbandPrinter/main/bin/TUH_WristbandPrinter.exe"
 }
