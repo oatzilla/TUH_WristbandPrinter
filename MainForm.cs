@@ -556,9 +556,10 @@ namespace TUH_WristbandPrinter
             topQueue.Controls.Add(lblQueueCount);
 
             btnRemoveSelected = new Button();
-            btnRemoveSelected.Text = "ลบที่เลือก";
-            btnRemoveSelected.Size = new Size(72, 26);
+            btnRemoveSelected.Text = "🗑 ลบที่เลือก";
+            btnRemoveSelected.Size = new Size(82, 26);
             btnRemoveSelected.BackColor = Color.FromArgb(241, 245, 249);
+            btnRemoveSelected.ForeColor = Color.FromArgb(51, 65, 85);
             btnRemoveSelected.FlatStyle = FlatStyle.Flat;
             btnRemoveSelected.FlatAppearance.BorderColor = Color.FromArgb(203, 213, 225);
             btnRemoveSelected.Cursor = Cursors.Hand;
@@ -579,6 +580,8 @@ namespace TUH_WristbandPrinter
             btnClearQueue.Click += (s, e) => ClearQueue();
             toolTips.SetToolTip(btnClearQueue, "ล้างรายการผู้ป่วยทั้งหมดออกจากคิวพิมพ์");
             topQueue.Controls.Add(btnClearQueue);
+
+            topQueue.Resize += (s, e) => UpdateQueueHeaderLayout();
 
             // Bottom print all button
             Panel bottomQueue = new Panel();
@@ -1580,9 +1583,7 @@ namespace TUH_WristbandPrinter
             }
 
             // 3. Queue header buttons alignment
-            int qW = topQueue.ClientSize.Width;
-            btnClearQueue.Location = new Point(qW - btnClearQueue.Width - 10, 8);
-            btnRemoveSelected.Location = new Point(btnClearQueue.Left - btnRemoveSelected.Width - 6, 8);
+            UpdateQueueHeaderLayout();
 
             // 4. Compact Right Details responsive sizing
             int rW = pnlRightContainer.ClientSize.Width;
@@ -1870,6 +1871,43 @@ namespace TUH_WristbandPrinter
             UpdateQueueCount();
         }
 
+        private void UpdateQueueHeaderLayout()
+        {
+            if (topQueue == null || btnClearQueue == null || btnRemoveSelected == null) return;
+
+            int qW = topQueue.ClientSize.Width;
+            if (_isSidebarMode || qW < 450)
+            {
+                btnRemoveSelected.Text = "🗑 ลบ";
+                btnRemoveSelected.Size = new Size(54, 26);
+                btnClearQueue.Text = "🧹 ล้าง";
+                btnClearQueue.Size = new Size(54, 26);
+            }
+            else
+            {
+                btnRemoveSelected.Text = "🗑 ลบที่เลือก";
+                btnRemoveSelected.Size = new Size(82, 26);
+                btnClearQueue.Text = "🧹 ล้างคิว";
+                btnClearQueue.Size = new Size(72, 26);
+            }
+
+            // Position immediately after lblQueueCount so buttons are NEVER hidden or obscured
+            int leftPos = Math.Max(240, lblQueueCount.Right + 12);
+            if (leftPos + btnRemoveSelected.Width + btnClearQueue.Width + 10 > qW && qW > 280)
+            {
+                btnClearQueue.Location = new Point(qW - btnClearQueue.Width - 8, 8);
+                btnRemoveSelected.Location = new Point(btnClearQueue.Left - btnRemoveSelected.Width - 6, 8);
+            }
+            else
+            {
+                btnRemoveSelected.Location = new Point(leftPos, 8);
+                btnClearQueue.Location = new Point(btnRemoveSelected.Right + 6, 8);
+            }
+
+            btnRemoveSelected.BringToFront();
+            btnClearQueue.BringToFront();
+        }
+
         private void UpdateQueueCount()
         {
             int total = _queue.Count;
@@ -1877,6 +1915,7 @@ namespace TUH_WristbandPrinter
             lblQueueCount.Text = string.Format("คิวรอพิมพ์: {0} (เลือก {1})", total, sel);
             btnPrintAll.Text = string.Format("🖨️  พิมพ์ทั้งหมดในคิว ({0} รายการ) [F9]", sel);
             btnPrintAll.Enabled = (sel > 0);
+            UpdateQueueHeaderLayout();
         }
 
         private void RemoveSelectedFromQueue()

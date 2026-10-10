@@ -1,6 +1,6 @@
 {
-  "version": "1.4.1",
+  "version": "1.4.2",
   "releaseDate": "2026-10-10",
-  "changelog": "บังคับใช้รูปแบบสายรัดข้อมือผู้ใหญ่ (dw_doc_sticker_listband_001) เท่านั้นตาม E-PHIS, และปรับระบบส่งพิมพ์ผ่านเครื่องแม่ให้ตอบกลับรวดเร็วและไม่หมดเวลา Timeout",
+  "changelog": "ปรับตำแหน่งปุ่มลบที่เลือกและล้างคิวให้อยู่ติดกับจำนวนคิว มองเห็นชัดเจนไม่ถูกบัง และรองรับการย่อขยายหน้าต่าง",
   "downloadUrl": "https://raw.githubusercontent.com/oatzilla/TUH_WristbandPrinter/main/bin/TUH_WristbandPrinter.exe"
 }
