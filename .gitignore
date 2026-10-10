@@ -1,5 +1,4 @@
-﻿# Binaries & build outputs
-bin/TUH_WristbandPrinter.exe
+# Build outputs
 bin/TUH_WristbandPrinter_new.exe
 *.obj
 *.pdb

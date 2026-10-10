@@ -2449,7 +2449,12 @@ namespace TUH_WristbandPrinter
                 try
                 {
                     string host = _config.RemoteServerHost;
+                    if (string.IsNullOrEmpty(host) && txtRemoteHost != null && !string.IsNullOrEmpty(txtRemoteHost.Text))
+                    {
+                        host = txtRemoteHost.Text.Trim();
+                    }
                     int port = _config.RemoteServerPort;
+                    if (port <= 0) port = 8099;
                     UpdateInfo info = UpdateService.Instance.CheckForUpdate(host, port);
 
                     this.BeginInvoke((MethodInvoker)delegate

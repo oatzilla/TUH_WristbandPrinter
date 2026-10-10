@@ -1,6 +1,6 @@
 {
-  "version": "1.3.0",
+  "version": "1.4.0",
   "releaseDate": "2026-10-10",
-  "changelog": "รองรับระบบ Auto Update อัตโนมัติข้ามเครื่องในวอร์ด และแก้ไขคอลัมน์ข้อมูลผู้ป่วย",
+  "changelog": "แก้เมนูด้านบนทับซ้อน, ปรับรูปแบบป้ายตรงตาม E-PHIS อัตโนมัติตามช่วงอายุ, แสดงสถานะกำลังส่งพิมพ์และป้องกันการกดซ้ำ",
   "downloadUrl": "https://raw.githubusercontent.com/oatzilla/TUH_WristbandPrinter/main/bin/TUH_WristbandPrinter.exe"
 }
