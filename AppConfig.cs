@@ -25,6 +25,9 @@ namespace TUH_WristbandPrinter
         public bool EnablePrintServer { get; set; }
         public int ServerPort { get; set; }
 
+        // Auto Update settings
+        public bool AutoCheckUpdate { get; set; }
+
         private static string ConfigPath
         {
             get
@@ -52,6 +55,8 @@ namespace TUH_WristbandPrinter
             RemoteServerPort = 8099;
             EnablePrintServer = true;
             ServerPort = 8099;
+
+            AutoCheckUpdate = true;
         }
 
         public static string EncryptSecret(string plain)
@@ -150,6 +155,10 @@ namespace TUH_WristbandPrinter
                                 int sp;
                                 if (int.TryParse(val, out sp) && sp > 0) config.ServerPort = sp;
                                 break;
+                            case "autocheckupdate":
+                                bool acu;
+                                if (bool.TryParse(val, out acu)) config.AutoCheckUpdate = acu;
+                                break;
                         }
                     }
                 }
@@ -180,6 +189,7 @@ namespace TUH_WristbandPrinter
                     sw.WriteLine("RemoteServerPort=" + RemoteServerPort);
                     sw.WriteLine("EnablePrintServer=" + EnablePrintServer);
                     sw.WriteLine("ServerPort=" + ServerPort);
+                    sw.WriteLine("AutoCheckUpdate=" + AutoCheckUpdate);
                 }
             }
             catch { }

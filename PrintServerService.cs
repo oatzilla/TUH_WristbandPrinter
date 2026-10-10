@@ -6,6 +6,7 @@ using System.Net.Sockets;
 using System.Text;
 using System.Threading;
 using System.Web.Script.Serialization;
+using System.Windows.Forms;
 
 namespace TUH_WristbandPrinter
 {
@@ -214,12 +215,66 @@ namespace TUH_WristbandPrinter
                                 IP = GetLocalIPAddress(),
                                 Port = _port,
                                 SelectedPrinter = "",
-                                Version = "1.2.0"
+                                Version = UpdateService.CurrentVersion
                             };
                         }
 
                         string json = serializer.Serialize(status);
                         SendHttpResponse(writer, 200, "OK", "application/json", json);
+                    }
+                    else if (method == "GET" && path == "/api/version")
+                    {
+                        string exePath = Application.ExecutablePath;
+                        long fileSize = 0;
+                        string modTime = "";
+                        if (File.Exists(exePath))
+                        {
+                            FileInfo fi = new FileInfo(exePath);
+                            fileSize = fi.Length;
+                            modTime = fi.LastWriteTime.ToString("yyyy-MM-dd HH:mm:ss");
+                        }
+
+                        var verPayload = new Dictionary<string, object>
+                        {
+                            { "version", UpdateService.CurrentVersion },
+                            { "releaseDate", modTime },
+                            { "fileSize", fileSize },
+                            { "machineName", Environment.MachineName },
+                            { "changelog", "อัปเดตเวอร์ชันล่าสุดจากเครื่องแม่ในวอร์ด (" + Environment.MachineName + ")" },
+                            { "downloadUrl", string.Format("http://{0}:{1}/api/download/exe", GetLocalIPAddress(), _port) }
+                        };
+
+                        string json = serializer.Serialize(verPayload);
+                        SendHttpResponse(writer, 200, "OK", "application/json", json);
+                    }
+                    else if (method == "GET" && (path == "/api/download/exe" || path == "/download/exe"))
+                    {
+                        string exePath = Application.ExecutablePath;
+                        if (File.Exists(exePath))
+                        {
+                            byte[] exeBytes;
+                            using (FileStream fs = new FileStream(exePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
+                            {
+                                exeBytes = new byte[fs.Length];
+                                fs.Read(exeBytes, 0, (int)fs.Length);
+                            }
+
+                            writer.WriteLine("HTTP/1.1 200 OK");
+                            writer.WriteLine("Content-Type: application/octet-stream");
+                            writer.WriteLine("Content-Disposition: attachment; filename=\"TUH_WristbandPrinter.exe\"");
+                            writer.WriteLine("Content-Length: " + exeBytes.Length);
+                            writer.WriteLine("Access-Control-Allow-Origin: *");
+                            writer.WriteLine("Connection: close");
+                            writer.WriteLine();
+                            writer.Flush();
+
+                            stream.Write(exeBytes, 0, exeBytes.Length);
+                            stream.Flush();
+                        }
+                        else
+                        {
+                            SendHttpResponse(writer, 404, "Not Found", "text/plain", "Executable file not found");
+                        }
                     }
                     else if (method == "POST" && path == "/api/print")
                     {

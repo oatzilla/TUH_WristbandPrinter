@@ -4,9 +4,11 @@ using System.Drawing;
 using System.Drawing.Printing;
 using System.IO;
 using System.Windows.Forms;
+using System.Threading;
 using Sybase.DataWindow;
 using RadioButton = System.Windows.Forms.RadioButton;
 using CheckBox = System.Windows.Forms.CheckBox;
+using Timer = System.Windows.Forms.Timer;
 
 namespace TUH_WristbandPrinter
 {
@@ -27,6 +29,7 @@ namespace TUH_WristbandPrinter
         private Button btnToggleSidebar;
         private Button btnTopHistory;
         private Button btnServerBadge;
+        private Button btnCheckUpdate;
         private CheckBox chkAlwaysOnTop;
 
         // Body & layout
@@ -176,6 +179,20 @@ namespace TUH_WristbandPrinter
             };
             heartbeatTimer.Start();
 
+            // Auto Update background check on startup
+            Timer startupUpdateTimer = new Timer();
+            startupUpdateTimer.Interval = 3000;
+            startupUpdateTimer.Tick += (s, e) =>
+            {
+                startupUpdateTimer.Stop();
+                startupUpdateTimer.Dispose();
+                if (_config.AutoCheckUpdate)
+                {
+                    CheckUpdateInBackground(false);
+                }
+            };
+            startupUpdateTimer.Start();
+
             this.KeyPreview = true;
             this.KeyDown += MainForm_KeyDown;
             this.Resize += MainForm_Resize;
@@ -256,6 +273,19 @@ namespace TUH_WristbandPrinter
             btnServerBadge.Click += (s, e) => ShowServerInfoDialog();
             toolTips.SetToolTip(btnServerBadge, "ดูข้อมูลเชื่อมต่อ Central Print Server สำหรับให้เครื่องอื่นในวอร์ดสั่งพิมพ์มาที่นี่");
             topBar.Controls.Add(btnServerBadge);
+
+            btnCheckUpdate = new Button();
+            btnCheckUpdate.Text = "๐” v" + UpdateService.CurrentVersion;
+            btnCheckUpdate.Size = new Size(95, 32);
+            btnCheckUpdate.BackColor = Color.FromArgb(24, 76, 120);
+            btnCheckUpdate.ForeColor = Color.White;
+            btnCheckUpdate.FlatStyle = FlatStyle.Flat;
+            btnCheckUpdate.FlatAppearance.BorderSize = 0;
+            btnCheckUpdate.Font = new Font("Segoe UI", 8F, FontStyle.Bold);
+            btnCheckUpdate.Cursor = Cursors.Hand;
+            btnCheckUpdate.Click += (s, e) => CheckUpdateInBackground(true);
+            toolTips.SetToolTip(btnCheckUpdate, "เธเธฅเธดเธเน€เธเธทเนเธญเธ•เธฃเธงเธเธชเธญเธเธเธฒเธฃเธญเธฑเธเน€เธ”เธ•เน€เธงเธญเธฃเนเธเธฑเธเนเธซเธกเน (Auto Update)");
+            topBar.Controls.Add(btnCheckUpdate);
 
             btnTopHistory = new Button();
             btnTopHistory.Text = "📜 ประวัติพิมพ์";
@@ -1211,7 +1241,7 @@ namespace TUH_WristbandPrinter
                 IP = PrintServerService.GetLocalIPAddress(),
                 Port = PrintServerService.Instance.Port,
                 SelectedPrinter = prn,
-                Version = "1.2.0"
+                Version = UpdateService.CurrentVersion
             };
         }
 
@@ -1384,6 +1414,9 @@ namespace TUH_WristbandPrinter
                 btnServerBadge.Size = new Size(80, 28);
                 btnServerBadge.Text = "📡 Server";
                 btnServerBadge.Location = new Point(btnTopHistory.Left - btnServerBadge.Width - 6, 10);
+
+                btnCheckUpdate.Size = new Size(65, 28);
+                btnCheckUpdate.Location = new Point(btnServerBadge.Left - btnCheckUpdate.Width - 6, 10);
             }
             else
             {
@@ -1401,10 +1434,13 @@ namespace TUH_WristbandPrinter
                     : "📡 Print Server";
                 btnServerBadge.Location = new Point(btnTopHistory.Left - btnServerBadge.Width - 8, 12);
 
-                if (btnServerBadge.Left - lblAppTitle.Right > 130)
+                btnCheckUpdate.Size = new Size(95, 32);
+                btnCheckUpdate.Location = new Point(btnServerBadge.Left - btnCheckUpdate.Width - 8, 12);
+
+                if (btnCheckUpdate.Left - lblAppTitle.Right > 130)
                 {
                     lblUser.Visible = true;
-                    lblUser.Location = new Point(btnServerBadge.Left - lblUser.Width - 8, 17);
+                    lblUser.Location = new Point(btnCheckUpdate.Left - lblUser.Width - 8, 17);
                 }
                 else
                 {
@@ -2184,5 +2220,129 @@ namespace TUH_WristbandPrinter
                 }
             }
         }
+
+        #region Auto Update
+
+        private void CheckUpdateInBackground(bool isManual)
+        {
+            if (isManual)
+            {
+                btnCheckUpdate.Text = "โณ เธเธณเธฅเธฑเธเน€เธเนเธ...";
+                this.Cursor = Cursors.WaitCursor;
+            }
+
+            ThreadPool.QueueUserWorkItem((state) =>
+            {
+                try
+                {
+                    string host = _config.RemoteServerHost;
+                    int port = _config.RemoteServerPort;
+                    UpdateInfo info = UpdateService.Instance.CheckForUpdate(host, port);
+
+                    this.BeginInvoke((MethodInvoker)delegate
+                    {
+                        if (isManual) this.Cursor = Cursors.Default;
+
+                        if (info.HasUpdate)
+                        {
+                            btnCheckUpdate.Text = "๐ เธกเธตเธญเธฑเธเน€เธ”เธ• " + info.LatestVersion;
+                            btnCheckUpdate.BackColor = Color.FromArgb(220, 38, 38); // Red
+                            btnCheckUpdate.ForeColor = Color.White;
+
+                            string msg = string.Format(
+                                "๐ เธเธเธเธฒเธฃเธญเธฑเธเน€เธ”เธ•เน€เธงเธญเธฃเนเธเธฑเธเนเธซเธกเนเธเธญเธ TUH Wristband Printer!\n\n" +
+                                "โ€ข เน€เธงเธญเธฃเนเธเธฑเธเนเธซเธกเน:  v{0} (เธเธฑเธเธเธธเธเธฑเธ v{1})\n" +
+                                "โ€ข เนเธซเธฅเนเธเธ—เธตเนเธกเธฒ:  {2}\n" +
+                                "โ€ข เธฃเธฒเธขเธฅเธฐเน€เธญเธตเธขเธ”:  {3}\n\n" +
+                                "เธ•เนเธญเธเธเธฒเธฃเธ”เธฒเธงเธเนเนเธซเธฅเธ”เนเธฅเธฐเธ•เธดเธ”เธ•เธฑเนเธเธเธฒเธฃเธญเธฑเธเน€เธ”เธ•เธ—เธฑเธเธ—เธตเธซเธฃเธทเธญเนเธกเน?\n" +
+                                "(เนเธเธฃเนเธเธฃเธกเธเธฐเธ”เธฒเธงเธเนเนเธซเธฅเธ”เนเธฅเธฐเน€เธเธดเธ”เน€เธงเธญเธฃเนเธเธฑเธเนเธซเธกเนเนเธซเนเธญเธฑเธ•เนเธเธกเธฑเธ•เธด)",
+                                info.LatestVersion, info.CurrentVersion, info.Source, 
+                                string.IsNullOrEmpty(info.Changelog) ? "เธเธฃเธฑเธเธเธฃเธธเธเธเธฃเธฐเธชเธดเธ—เธเธดเธ เธฒเธเนเธฅเธฐเนเธเนเนเธเธเนเธญเธเธดเธ”เธเธฅเธฒเธ”" : info.Changelog);
+
+                            if (MessageBox.Show(this, msg, "เธเธเน€เธงเธญเธฃเนเธเธฑเธเนเธซเธกเน v" + info.LatestVersion, 
+                                MessageBoxButtons.YesNo, MessageBoxIcon.Information) == DialogResult.Yes)
+                            {
+                                PromptApplyUpdate(info);
+                            }
+                        }
+                        else
+                        {
+                            btnCheckUpdate.Text = "๐” v" + UpdateService.CurrentVersion;
+                            btnCheckUpdate.BackColor = Color.FromArgb(24, 76, 120);
+                            btnCheckUpdate.ForeColor = Color.White;
+
+                            if (isManual)
+                            {
+                                MessageBox.Show(this, 
+                                    "เธเธธเธ“เธเธณเธฅเธฑเธเนเธเนเธเธฒเธเนเธเธฃเนเธเธฃเธกเน€เธงเธญเธฃเนเธเธฑเธเธฅเนเธฒเธชเธธเธ”เนเธฅเนเธง (v" + UpdateService.CurrentVersion + ")", 
+                                    "เธ•เธฃเธงเธเธชเธญเธเธเธฒเธฃเธญเธฑเธเน€เธ”เธ•", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                            }
+                        }
+                    });
+                }
+                catch (Exception ex)
+                {
+                    this.BeginInvoke((MethodInvoker)delegate
+                    {
+                        if (isManual)
+                        {
+                            this.Cursor = Cursors.Default;
+                            btnCheckUpdate.Text = "๐” v" + UpdateService.CurrentVersion;
+                            MessageBox.Show(this, "เนเธกเนเธชเธฒเธกเธฒเธฃเธ–เธ•เธฃเธงเธเธชเธญเธเธเธฒเธฃเธญเธฑเธเน€เธ”เธ•เนเธ”เน: " + ex.Message, 
+                                "เธ•เธฃเธงเธเธชเธญเธเธเธฒเธฃเธญเธฑเธเน€เธ”เธ•", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                        }
+                    });
+                }
+            });
+        }
+
+        private void PromptApplyUpdate(UpdateInfo info)
+        {
+            Form progressForm = new Form();
+            progressForm.Text = "เธเธณเธฅเธฑเธเธญเธฑเธเน€เธ”เธ•เนเธเธฃเนเธเธฃเธก...";
+            progressForm.FormBorderStyle = FormBorderStyle.FixedDialog;
+            progressForm.StartPosition = FormStartPosition.CenterScreen;
+            progressForm.Size = new Size(400, 150);
+            progressForm.MaximizeBox = false;
+            progressForm.MinimizeBox = false;
+            progressForm.ControlBox = false;
+
+            Label lbl = new Label();
+            lbl.Text = "เธเธณเธฅเธฑเธเธ”เธฒเธงเธเนเนเธซเธฅเธ”เนเธเธฅเนเธญเธฑเธเน€เธ”เธ•เธเธฒเธ " + info.Source + "...\nเธเธฃเธธเธ“เธฒเธฃเธญเธชเธฑเธเธเธฃเธนเน เนเธเธฃเนเธเธฃเธกเธเธฐเธฃเธตเธชเธ•เธฒเธฃเนเธ—เน€เธเนเธเน€เธงเธญเธฃเนเธเธฑเธเนเธซเธกเนเนเธ”เธขเธญเธฑเธ•เนเธเธกเธฑเธ•เธด";
+            lbl.Location = new Point(20, 20);
+            lbl.Size = new Size(350, 40);
+            lbl.Font = new Font("Segoe UI", 9F);
+            progressForm.Controls.Add(lbl);
+
+            ProgressBar pb = new ProgressBar();
+            pb.Style = ProgressBarStyle.Marquee;
+            pb.Location = new Point(20, 65);
+            pb.Size = new Size(345, 22);
+            progressForm.Controls.Add(pb);
+
+            progressForm.Shown += (s, e) =>
+            {
+                ThreadPool.QueueUserWorkItem((state) =>
+                {
+                    try
+                    {
+                        UpdateService.Instance.DownloadAndApplyUpdate(info.DownloadUrl);
+                    }
+                    catch (Exception ex)
+                    {
+                        this.BeginInvoke((MethodInvoker)delegate
+                        {
+                            progressForm.Close();
+                            MessageBox.Show(this, "เน€เธเธดเธ”เธเนเธญเธเธดเธ”เธเธฅเธฒเธ”เนเธเธเธฒเธฃเธ”เธฒเธงเธเนเนเธซเธฅเธ”เธญเธฑเธเน€เธ”เธ•: " + ex.Message, 
+                                "เธเนเธญเธเธดเธ”เธเธฅเธฒเธ”", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                        });
+                    }
+                });
+            };
+
+            progressForm.ShowDialog(this);
+        }
+
+        #endregion
     }
 }
